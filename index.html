@@ -544,7 +544,9 @@ scene.add(hemi, sun, sun.target);
    world scale, vertex colour × greyscale clay diffuse, whiteout-blended clay normals, vertex alpha
    = matte (1) or gloss (0). Skinned meshes use the bind pose, so the clay never slides. */
 const texLoader = new THREE.TextureLoader();
-function repeatTex(src, srgb){ const t = texLoader.load(src); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = maxAniso; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; }
+// if a texture can't load, fall back to a flat one (mid grey, or a flat normal) so the clay is never black
+function flatTex(rgb){ const c = document.createElement('canvas'); c.width = c.height = 2; const g = c.getContext('2d'); g.fillStyle = rgb; g.fillRect(0, 0, 2, 2); return c; }
+function repeatTex(src, srgb){ const t = texLoader.load(src, undefined, undefined, () => { t.image = flatTex(srgb ? '#a1a1a1' : '#8080ff'); t.needsUpdate = true; console.warn('missing texture', src); }); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = maxAniso; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; }
 const clayUniforms = {
   uClayDiffuse: { value: repeatTex('img/clay-diffuse.jpg', true) },
   uClayNormal:  { value: repeatTex('img/clay-normal.jpg', false) },
