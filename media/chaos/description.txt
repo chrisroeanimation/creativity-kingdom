@@ -1,0 +1,5 @@
+An absurd animated series that meets ingenious interactivity.
+
+Claydini is a scatterbrained visionary desperate to get into the exclusive wizards' guild. But being a misguided genius, every one of Claydini's spells creates something unintentionally silly. Through aeons of magical mishaps, the tardis-like castle has grown countless rooms and phantasmagorical characters; it's now so big that no one knows where it ends. Realising things are utterly out of hand, Claydini has employed two assistants, Gogo and Sproggy, to tackle tasks, investigate the illogical and contend with the chaos.
+
+I developed Chaos Castle as original television and interactive game IP, designing the characters, the world and the pitch materials. To keep the stretchy, squashy, tactile charm of plasticine while making it interactive, the plan combines real clay stop-motion with clay-textured CG, each used where it works best, along with Unreal Engine tools for building the castle's interior. The project was not commissioned.
