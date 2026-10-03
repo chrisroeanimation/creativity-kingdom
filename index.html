@@ -108,6 +108,10 @@ a{color:var(--navy)}
 .gallery figcaption{font-size:13px;line-height:1.4;color:var(--muted);padding:0 4px}
 .actions{display:flex;flex-wrap:wrap;gap:12px;padding-top:4px}
 .close{position:absolute;top:14px;right:14px;width:48px;height:48px;padding:0;border-radius:14px}
+.quotes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px;margin:4px 0}
+.quotes blockquote{margin:0;padding:14px 16px;background:#fff;border:3px solid var(--navy);border-radius:16px;box-shadow:0 4px 0 var(--navy-deep);display:flex;flex-direction:column;justify-content:space-between;gap:8px}
+.quotes blockquote p{margin:0;font-family:var(--display);font-size:19px;line-height:1.2;color:var(--navy)}
+.quotes cite{font-style:normal;font-family:var(--body);font-weight:700;font-size:13px;color:var(--muted);letter-spacing:.02em}
 .card .credits{display:flex;flex-direction:column;border-top:2px solid #e2d6bf}
 .card .credits div{display:grid;grid-template-columns:minmax(0,150px) minmax(0,1fr);gap:14px;padding:11px 0;border-bottom:2px solid #e2d6bf;font-size:15px;line-height:1.45}
 .card .credits dt,.card .credits b{font-weight:700;color:var(--navy)}
@@ -301,7 +305,10 @@ const PROJECTS = [
     body:['I created the concept, the characters and the handmade world of Clay Jam, a ridiculously happy mobile game where every creature, prop and hillside is real, squishy plasticine, photographed and brought into the game.',
           'As a founder of Fat Pebble, a 24-person studio, I led its art and animation department of eight and set the visual rules everyone built to, so every new creature felt like it came from the same hands. The game was nominated in the Family category at the 2013 BAFTA Games Awards and has reached more than 10 million players.',
           'Now at YumYumYukYuk, I’m creating the world for Clay Jam 2, currently in production.'],
-    quote:['“Full of character and colour.”','Pocket Gamer'],
+    quotes:[['“Full of character and colour.”','Pocket Gamer'],
+            ['“An incredible artistic and technical achievement.”','Modojo'],
+            ['“Every lovingly-molded inch of Clay Jam is an uncanny delight.”','Kotaku'],
+            ['“Clay Jam is a blast to play for kids and kids at heart.”','USA Today']],
     images:[], video:'', watch:'', links:[['YumYumYukYuk',YUMYUM]] },
   { id:'chaos', title:'Chaos Castle', ride:'Chaos Castle', theme:'Designing worlds', role:'Creator & Creative Director', org:'Super Strange Studios',
     tags:['Original IP','Animated series & game','Uncommissioned development'],
@@ -485,7 +492,8 @@ function openProject(id){
   $('#pTags').hidden = !p.tags.length;
   p.bodyFromMedia = false;
   let body = p.body.map(t=>`<p class="desc">${esc(t)}</p>`).join('');
-  if (p.quote) body += `<p style="font-family:var(--display);font-size:24px;line-height:1.2;color:var(--navy)">${esc(p.quote[0])} <span style="font-family:var(--body);font-size:14px;color:var(--muted)">${esc(p.quote[1])}</span></p>`;
+  const quotes = p.quotes || (p.quote ? [p.quote] : []);
+  if (quotes.length) body += `<div class="quotes">${quotes.map(([q, who]) => `<blockquote><p>${esc(q)}</p><cite>${esc(who)}</cite></blockquote>`).join('')}</div>`;
   if (p.cv) body += `<h3 style="margin:6px 0 0;font-family:var(--display);font-weight:400;font-size:24px;color:var(--navy)">CV</h3><ol class="timeline">${p.cv.map(([d,a,b])=>`<li><time>${esc(d)}</time><div><b>${esc(a)}</b><span>${esc(b)}</span></div></li>`).join('')}</ol>`;
   if (p.credits) body += `<div class="credits">${p.credits.map(([a,b])=>`<div><b>${esc(a)}</b><span>${esc(b)}</span></div>`).join('')}</div>`;
   $('#pBody').innerHTML = body;
@@ -628,7 +636,7 @@ scene.add(hemi, sun, sun.target);
    The light drifts from midday to a golden late afternoon, on to a soft, cool evening, then back again.
    DAY_CYCLE is the length of one full loop in seconds (0 keeps it at midday all the time).
    Each moment is a set of colours and strengths; edit them to taste. */
-const DAY_CYCLE = 220;
+const DAY_CYCLE = 120;
 const C = h => new THREE.Color(h);
 const DAY_KEYS = [
   { name:'midday',     from:new THREE.Vector3(0.62, 0.72, 0.30), sun:null /* the park's own sun */, sunK:1.00, sky:C('#f4f1ea'), ground:C('#4f7f4c'), hemiI:1.05, amb:C('#ffd9b0'), ambI:0.35, horizon:C('#a6dcff'), top:C('#06148f'), exp:1.05 },
