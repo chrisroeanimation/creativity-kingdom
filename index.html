@@ -368,9 +368,30 @@ document.querySelectorAll('.veil:not(.intro)').forEach(v=>v.addEventListener('po
 const MEDIA_DIR = 'media';
 const mediaCache = {};
 const IMG_EXT = ['jpg', 'png', 'webp', 'jpeg'], VID_EXT = ['mp4', 'webm', 'm4v'];
-// does this file exist? ask the server without downloading it (a 1-byte range request if HEAD isn't allowed)
-const exists = async src => { try { let r = await fetch(src, { method:'HEAD', cache:'no-cache' }); if (r.status === 405) r = await fetch(src, { headers:{ Range:'bytes=0-0' } });
-  return r.ok && !/text\/html/.test(r.headers.get('content-type') || ''); } catch (e) { return false; } };
+// On the live site, one request to GitHub lists every file in the repository, so the site knows which
+// pictures and videos exist without asking for each possible name (that was slow on mobile data).
+const GITHUB_REPO = 'chrisroeanimation/creativity-kingdom', GITHUB_BRANCH = 'main';
+let fileListP = null;
+function fileList(){
+  return fileListP || (fileListP = (async () => {
+    if (!/(^|\.)chrisroeanimation\.com$|\.github\.io$/.test(location.hostname)) return null;
+    try {
+      const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 8000);
+      const r = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/git/trees/${GITHUB_BRANCH}?recursive=1`, { signal:ctl.signal }); clearTimeout(t);
+      if (!r.ok) return null; const j = await r.json(); if (j.truncated || !Array.isArray(j.tree)) return null;
+      return new Set(j.tree.filter(x => x.type === 'blob').map(x => x.path));
+    } catch (e) { return null; }
+  })());
+}
+const relPath = src => decodeURIComponent(new URL(src, location.href).pathname).replace(/^\//, '').replace(/^creativity-kingdom\//, '');
+// does this file exist? use the GitHub list when there is one; otherwise ask the server without downloading
+// (a 1-byte range request if HEAD isn't allowed), trying twice in case the connection hiccups
+const exists = async src => { const L = await fileList(); if (L) return L.has(relPath(src));
+  for (let attempt = 0; attempt < 2; attempt++){
+    try { let r = await fetch(src, { method:'HEAD' }); if (r.status === 405) r = await fetch(src, { headers:{ Range:'bytes=0-0' } });
+      return (r.ok || r.status === 206) && !/text\/html/.test(r.headers.get('content-type') || ''); } catch (e) {}
+  }
+  return false; };
 // find "<name>.<ext>" trying lower-case extensions first, then upper-case
 async function findFile(base, name, exts){
   for (const variants of [exts, exts.map(e => e.toUpperCase())]){
@@ -380,7 +401,7 @@ async function findFile(base, name, exts){
   return null;
 }
 const isVideo = src => /\.(mp4|webm|m4v)$/i.test(src);
-async function readText(url){ try { const r = await fetch(url, { cache:'no-cache' }); if (!r.ok) return ''; const t = await r.text(); return /^\s*</.test(t) ? '' : t; } catch (e) { return ''; } }
+async function readText(url){ const L = await fileList(); if (L && !L.has(relPath(url))) return ''; try { const r = await fetch(url, { cache:'no-cache' }); if (!r.ok) return ''; const t = await r.text(); return /^\s*</.test(t) ? '' : t; } catch (e) { return ''; } }
 function discoverMedia(id){
   if (mediaCache[id]) return mediaCache[id];
   return mediaCache[id] = (async () => {
@@ -409,6 +430,7 @@ function discoverMedia(id){
     const thumb = await findFile(base, 'thumbnail', IMG_EXT);
     const desc = await readText(base + 'description.txt');
     const body = desc.trim() ? desc.replace(/\r/g, '').split(/\n\s*\n/).map(p => p.replace(/\s*\n\s*/g, ' ').trim()).filter(Boolean) : null;
+    if (!items.length && !(await fileList())) delete mediaCache[id];   // found nothing by asking: try again next time the panel opens
     return { items, images: items.filter(it => !it.video).map(it => it.src), body, thumb };
   })();
 }
@@ -430,7 +452,12 @@ function renderMedia(p){
   // the park music steps aside while a video plays; only one video plays at a time
   const vids = [...$('#pMedia').querySelectorAll('video')];
   vids.forEach(v => { v.addEventListener('play', () => { pauseMusic(); vids.forEach(o => o !== v && o.pause()); });
-    const back = () => { if (vids.some(o => !o.paused)) return; if (musicOn && $('#intro').hidden) playMusic(); }; v.addEventListener('pause', back); v.addEventListener('ended', back); });
+    const back = () => { if (vids.some(o => !o.paused)) return; if (musicOn && $('#intro').hidden) playMusic(); }; v.addEventListener('pause', back);
+    // when a video finishes while full screen, shrink it back into the panel
+    v.addEventListener('ended', () => { const fs = document.fullscreenElement || document.webkitFullscreenElement;
+      if (fs) (document.exitFullscreen || document.webkitExitFullscreen).call(document).catch?.(() => {});
+      else if (v.webkitDisplayingFullscreen && v.webkitExitFullscreen) v.webkitExitFullscreen();   // iPhone's own full-screen player
+      back(); }); });
   if (m.body && !p.bodyFromMedia){ $('#pBody').querySelectorAll('p.desc').forEach(e => e.remove()); $('#pBody').insertAdjacentHTML('afterbegin', m.body.map(t => `<p class="desc">${esc(t)}</p>`).join('')); }
 }
 function openProject(id){
