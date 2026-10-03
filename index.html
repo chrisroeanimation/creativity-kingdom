@@ -319,14 +319,10 @@ const PROJECTS = [
     body:['A short film about the turbulent love life of the rare wattle weasel, made with a single puppet shot many times with interchangeable wattles, beaks and legs.',
           'I motion tracked the live-action puppet footage and added expressive CG eyes, the same practical-plus-digital approach I used on a freelance Siemens film.'],
     images:[], video:'', watch:'', links:[] },
-  { id:'reel', title:'Showreel & Portfolio', short:'Showreel', ride:'Showreel Coaster', theme:'Leading teams', role:'Animation Director · Animator · 3D Generalist', org:'2002 – today',
-    tags:['Move Animation Studio','Aardman','LEGO · Mattel','Lionhead · Ninja Theory · Zoe Mode'],
-    body:['Twenty years of characters in motion, from console games to Aardman to directing animated shorts. Ride the coaster, then watch the reel.'], credits:[
-      ['Move Animation Studio','Freelance Animation Director and senior animator on the short films Magic Maya and Bubblegum Pie. Built and animated assets for LEGO and Mattel projects.'],
-      ['Aardman Animations','Character animation for Chicken Run: Eggstraction, 3D generalist work across interactive projects, and helping oversee digital assets from Aardman IP used by third parties.'],
-      ['Games','Animator to Senior Artist at Lionhead, Ninja Theory and Zoe Mode: models, rigs and character animation for PC and console, supervising artists and solving technical problems.'],
-      ['Studios founded','Fat Pebble, Super Strange Studios and YumYumYukYuk.']],
-    images:[], video:'', watch:YOUTUBE, links:[] },
+  { id:'reel', title:'Showreel & Portfolio', short:'Showreel', ride:'Showreel Coaster', theme:'Leading teams', role:'Creator · Art & Animation Director', org:'2002 – today',
+    tags:[],
+    body:['A walk through the worlds I’ve created and the teams I’ve led, from the first idea to the finished game, series and film. Ride the coaster, then watch the reel.'],
+    images:[], video:'', watch:'https://youtu.be/Gkdbdh3PT-g', links:[] },
   { id:'about', title:'Hello, I’m Chris', ride:'About Me & CV', theme:'', role:'Creative, Art & Animation Director', org:'West Sussex, UK',
     tags:['20+ years','BAFTA-nominated','Former BAFTA judge','Founder of 3 studios'],
     body:['I’m Chris Roe, an art and animation director who designs original worlds, finds ways to build them, and leads the teams that bring them to life. My work spans games, television and film, combining physical sets, puppets and handmade materials with CG and real-time interactive production.',
@@ -365,7 +361,7 @@ document.querySelectorAll('.veil:not(.intro)').forEach(v=>v.addEventListener('po
    (see media/README.txt). Project ids: clayjam chaos makes sky strike creature weasels reel about
      01, 02, 03 …           pictures (.jpg .png .webp) or videos (.mp4), shown in number order; gaps are fine
      video.mp4, video2.mp4 … extra videos, shown first
-     <name>-poster.jpg      the still shown on a video before it plays (poster.jpg for video.mp4)
+     <name>-poster.jpg      the still shown on a video before it plays (poster.jpg for video.mp4, poster2.jpg for video2.mp4)
      captions.txt           titles: lines like "03: The making of the lab" or "video2: Behind the scenes"
      description.txt        the project's text; a blank line starts a new paragraph
    Upper-case extensions (.JPG, .MP4) work too. */
@@ -402,7 +398,7 @@ function discoverMedia(id){
     // posters for videos
     const firstVideo = items.find(it => it.video);
     await Promise.all(items.filter(it => it.video).map(async it => {
-      it.poster = await findFile(base, it.key + '-poster', ['jpg', 'png']) || (it === firstVideo ? await findFile(base, 'poster', ['jpg', 'png']) : null) || '';
+      it.poster = await findFile(base, it.key + '-poster', ['jpg', 'png']) || (/^video\d+$/.test(it.key) ? await findFile(base, it.key.replace('video', 'poster'), ['jpg', 'png']) : null) || (it === firstVideo ? await findFile(base, 'poster', ['jpg', 'png']) : null) || '';
     }));
     // titles and captions
     const cap = await readText(base + 'captions.txt'), loose = [];
@@ -445,6 +441,7 @@ function openProject(id){
   $('#pTitle').textContent = p.title;
   $('#pRole').innerHTML = `${esc(p.role)} <span>· ${esc(p.org)}</span>`;
   $('#pTags').innerHTML = p.tags.map(t=>`<span>${esc(t)}</span>`).join('');
+  $('#pTags').hidden = !p.tags.length;
   p.bodyFromMedia = false;
   let body = p.body.map(t=>`<p class="desc">${esc(t)}</p>`).join('');
   if (p.quote) body += `<p style="font-family:var(--display);font-size:24px;line-height:1.2;color:var(--navy)">${esc(p.quote[0])} <span style="font-family:var(--body);font-size:14px;color:var(--muted)">${esc(p.quote[1])}</span></p>`;
@@ -1144,7 +1141,7 @@ canvas.addEventListener('wheel', e => { e.preventDefault(); zoom = THREE.MathUti
 
 function buildMapList(){
   const names = {'clayjam': 'Clay Jam', 'chaos': 'Chaos Castle', 'makes': 'Marvellous Makes', 'sky': 'Sky Kids Christmas', 'strike': 'Strike', 'creature': 'Creature Box', 'weasels': 'Wattle Weasels', 'reel': 'Showreel Coaster', 'about': 'About Me & CV'};
-  const subs = {'clayjam': 'BAFTA-nominated · Game', 'chaos': 'TV Series · Game', 'makes': 'TV Series', 'sky': 'TV interstitials', 'strike': 'Feature Film', 'creature': 'Animation · Game', 'weasels': 'Film', 'reel': 'Credits · Move · Aardman · Games', 'about': 'The Hub · Chris Roe'};
+  const subs = {'clayjam': 'BAFTA-nominated · Game', 'chaos': 'TV Series · Game', 'makes': 'TV Series', 'sky': 'TV interstitials', 'strike': 'Feature Film', 'creature': 'Animation · Game', 'weasels': 'Film', 'reel': 'Creator & lead roles', 'about': 'The Hub · Chris Roe'};
   const ids = RIDE_ORDER.filter(id => zones.some(z => z.id === id));
   const short = { clayjam:'Clay Jam', chaos:'Chaos Castle', makes:'Marvellous Makes', reel:'Showreel Coaster', sky:'Sky Kids Christmas', strike:'Strike', creature:'Creature Box', weasels:'Wattle Weasels', about:'About Me & CV' };
   const pct = v => ((v + MAP_HALF) / (MAP_HALF * 2) * 100).toFixed(2) + '%';
