@@ -3,7 +3,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Chris Roe — Creative, Art & Animation Director. Walk around a handmade clay theme park where every ride is one of my projects.">
-<title>Chris Roe's Creativity Kingdom</title>
+<title>Chris Roe – Creative, Art & Animation Director | Creativity Kingdom</title>
+<link rel="canonical" href="https://www.chrisroeanimation.com/">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#1f2a6b">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Chris Roe's Creativity Kingdom">
+<meta property="og:title" content="Chris Roe – Creative, Art & Animation Director">
+<meta property="og:description" content="Walk around a handmade clay theme park where every ride is one of my projects.">
+<meta property="og:url" content="https://www.chrisroeanimation.com/">
+<meta property="og:image" content="https://www.chrisroeanimation.com/img/share.jpg">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Person","name":"Chris Roe","jobTitle":"Creative, Art & Animation Director","url":"https://www.chrisroeanimation.com/","email":"mailto:chris@chrisroeanimation.com","address":{"@type":"PostalAddress","addressRegion":"West Sussex","addressCountry":"GB"},"sameAs":["https://www.linkedin.com/in/chris-roe-1392542/","https://www.instagram.com/chrisroeanimation/"]}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=DM+Sans:opsz,wght@9..40,400..700&display=swap">
@@ -610,6 +624,36 @@ const sunOffset = new THREE.Vector3(22, 42, 16);
 if (SUN_FROM) sunOffset.copy(SUN_FROM).normalize().multiplyScalar(60);
 scene.add(hemi, sun, sun.target);
 
+/* ───────────── TIME OF DAY ─────────────
+   The light drifts from midday to a golden late afternoon, on to a soft, cool evening, then back again.
+   DAY_CYCLE is the length of one full loop in seconds (0 keeps it at midday all the time).
+   Each moment is a set of colours and strengths; edit them to taste. */
+const DAY_CYCLE = 220;
+const C = h => new THREE.Color(h);
+const DAY_KEYS = [
+  { name:'midday',     from:new THREE.Vector3(0.62, 0.72, 0.30), sun:null /* the park's own sun */, sunK:1.00, sky:C('#f4f1ea'), ground:C('#4f7f4c'), hemiI:1.05, amb:C('#ffd9b0'), ambI:0.35, horizon:C('#a6dcff'), top:C('#06148f'), exp:1.05 },
+  { name:'afternoon',  from:new THREE.Vector3(0.80, 0.42, 0.16), sun:C('#ffcf85'),                       sunK:0.88, sky:C('#fff0dc'), ground:C('#5a8048'), hemiI:1.00, amb:C('#ffcf9e'), ambI:0.42, horizon:C('#ffd8ad'), top:C('#23238a'), exp:1.10 },
+  { name:'evening',    from:new THREE.Vector3(0.72, 0.70, -0.01), sun:C('#b8b8ec'),                      sunK:0.47, sky:C('#d2d6f8'), ground:C('#456461'), hemiI:1.14, amb:C('#cac8ef'), ambI:0.48, horizon:C('#b7bbe4'), top:C('#121665'), exp:1.04 },
+];
+const middaySun = { color:new THREE.Color('#fff6ea'), i:2.6 };
+const dayTmp = { v:new THREE.Vector3() };
+function mixKey(field, k0, k1, t, out){
+  const a = field === 'sun' ? (k0.sun || middaySun.color) : k0[field], b = field === 'sun' ? (k1.sun || middaySun.color) : k1[field];
+  return out.copy(a).lerp(b, t); }
+function setDaylight(T){
+  // 0 → 1 → 0 over one cycle, lingering a little at each end so midday and evening both get their moment
+  const ph = DAY_CYCLE > 0 ? (T % DAY_CYCLE) / DAY_CYCLE : 0;
+  const w = 0.5 - 0.5 * Math.cos(ph * Math.PI * 2);
+  const seg = w < 0.5 ? 0 : 1, t0 = (w - seg * 0.5) * 2, t = t0 * t0 * (3 - 2 * t0);
+  const k0 = DAY_KEYS[seg], k1 = DAY_KEYS[seg + 1];
+  mixKey('sun', k0, k1, t, sun.color); sun.intensity = middaySun.i * THREE.MathUtils.lerp(k0.sunK, k1.sunK, t);
+  hemi.color.copy(k0.sky).lerp(k1.sky, t); hemi.groundColor.copy(k0.ground).lerp(k1.ground, t); hemi.intensity = THREE.MathUtils.lerp(k0.hemiI, k1.hemiI, t);
+  ambient.color.copy(k0.amb).lerp(k1.amb, t); ambient.intensity = THREE.MathUtils.lerp(k0.ambI, k1.ambI, t);
+  SKY_HORIZON.copy(k0.horizon).lerp(k1.horizon, t); SKY_TOP.copy(k0.top).lerp(k1.top, t);   // also the fog and background colour
+  renderer.toneMappingExposure = THREE.MathUtils.lerp(k0.exp, k1.exp, t);
+  sunOffset.copy(k0.from).normalize().lerp(dayTmp.v.copy(k1.from).normalize(), t).normalize().multiplyScalar(60);
+}
+
 /* ───────────── CLAY MATERIAL ─────────────
    Same maths as ClayPark/ClayTriplanar in Unity: object-space triplanar scaled by the object's
    world scale, vertex colour × greyscale clay diffuse, whiteout-blended clay normals, vertex alpha
@@ -816,7 +860,7 @@ function buildFromGLTF(gltf){
   const numeric = (a, b) => a.name.localeCompare(b.name, undefined, { numeric:true });
 
   // Unity's sun: take its direction and colour.
-  root.traverse(o => { if (o.isDirectionalLight){ const d = new THREE.Vector3(); o.getWorldDirection(d); if (!SUN_FROM && d.y > 0.15) sunOffset.copy(d.normalize().multiplyScalar(60)); sun.color.copy(o.color); sun.intensity = Math.min(3.6, Math.max(1.5, o.intensity * 0.9)); } });
+  root.traverse(o => { if (o.isDirectionalLight){ const d = new THREE.Vector3(); o.getWorldDirection(d); if (!SUN_FROM && d.y > 0.15) sunOffset.copy(d.normalize().multiplyScalar(60)); sun.color.copy(o.color); sun.intensity = Math.min(3.6, Math.max(1.5, o.intensity * 0.9)); middaySun.color.copy(sun.color); middaySun.i = sun.intensity; } });
   const strip = []; root.traverse(o => { if (o.isLight || o.isCamera) strip.push(o); });
   strip.forEach(o => o.parent && o.parent.remove(o));
 
@@ -1329,6 +1373,7 @@ function frame(){
     for (const f of faders){ const hit = fadeRay.intersectBox(f.box, fadeHit); const want = hit && hit.distanceTo(camPos) < L ? .18 : 1;
       f.o += (want - f.o) * (1 - Math.exp(-dt * 7)); f.fm.opacity = f.o; f.m.material = f.o > .98 ? clayMat : f.fm; f.m.castShadow = f.o > .5; }
   }
+  setDaylight(T);
   sun.position.copy(look).add(sunOffset); sun.target.position.copy(look);
   sky.position.copy(camera.position); skyUniforms.uTime.value = T;
   renderer.render(scene, camera);
