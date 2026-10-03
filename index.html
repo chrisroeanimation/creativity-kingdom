@@ -112,6 +112,21 @@ a{color:var(--navy)}
 .quotes blockquote{margin:0;padding:14px 16px;background:#fff;border:3px solid var(--navy);border-radius:16px;box-shadow:0 4px 0 var(--navy-deep);display:flex;flex-direction:column;justify-content:space-between;gap:8px}
 .quotes blockquote p{margin:0;font-family:var(--display);font-size:19px;line-height:1.2;color:var(--navy)}
 .quotes cite{font-style:normal;font-family:var(--body);font-weight:700;font-size:13px;color:var(--muted);letter-spacing:.02em}
+/* Picture viewer: click a project picture to see it large; swipe, arrow keys or the arrow buttons move between pictures */
+#viewer{position:fixed;inset:0;z-index:60;background:rgba(8,10,28,.92);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);display:flex}
+#viewer .vstrip{flex:1;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;touch-action:pan-x pinch-zoom;overscroll-behavior:contain}
+#viewer .vstrip::-webkit-scrollbar{display:none}
+#viewer .vslide{flex:0 0 100%;margin:0;height:100%;scroll-snap-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:64px clamp(12px,7vw,96px) 52px;box-sizing:border-box}
+#viewer .vslide img{max-width:100%;max-height:calc(100% - 30px);object-fit:contain;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.5);user-select:none;-webkit-user-drag:none}
+#viewer .vslide figcaption{color:#f3eedf;font-size:15px;text-align:center;max-width:70ch}
+#viewer .vclose{position:absolute;top:14px;right:14px}
+#viewer .varrow{position:absolute;top:50%;transform:translateY(-50%);width:52px;height:52px;padding:0}
+#viewer .varrow svg{width:24px;height:24px}
+#viewer .vprev{left:14px} #viewer .vnext{right:14px}
+#viewer .varrow[disabled]{opacity:.3;pointer-events:none}
+#viewer .vcount{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);color:#f3eedf;font-family:var(--display);font-size:16px;letter-spacing:.06em}
+#pMedia .gallery img{cursor:zoom-in}
+@media (hover:none){#viewer .varrow{display:none}}
 .card .credits{display:flex;flex-direction:column;border-top:2px solid #e2d6bf}
 .card .credits div{display:grid;grid-template-columns:minmax(0,150px) minmax(0,1fr);gap:14px;padding:11px 0;border-bottom:2px solid #e2d6bf;font-size:15px;line-height:1.45}
 .card .credits dt,.card .credits b{font-weight:700;color:var(--navy)}
@@ -281,6 +296,14 @@ a{color:var(--navy)}
     <div class="parkmap" id="parkmap"><img src="img/park-map.jpg" alt="Map of the park from above"><div id="pins"></div><i class="you" id="youPin" aria-hidden="true"></i></div>
     <div class="maplist" id="maplist"></div>
   </div>
+</div>
+
+<div id="viewer" role="dialog" aria-modal="true" aria-label="Pictures" hidden>
+  <div class="vstrip" id="vStrip"></div>
+  <button class="plate close vclose" id="vClose" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  <button class="plate varrow vprev" id="vPrev" aria-label="Previous picture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+  <button class="plate varrow vnext" id="vNext" aria-label="Next picture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+  <div class="vcount" id="vCount" aria-live="polite"></div>
 </div>
 
 <script type="importmap">{ "imports": { "three": "./three.module.min.js" } }</script>
@@ -470,6 +493,10 @@ function renderMedia(p){
   flush();
   if (p.portrait && !m.images.length) media += `<div class="gallery" style="grid-template-columns:minmax(0,180px);justify-content:center"><img src="img/portrait.jpg" alt="Chris Roe"></div>`;
   $('#pMedia').innerHTML = media; $('#pMedia').hidden = !media;
+  const pics = [...$('#pMedia').querySelectorAll('.gallery img')];
+  pics.forEach((img, i) => { img.tabIndex = 0; img.setAttribute('role', 'button');
+    const open = () => openViewer(pics.map(x => ({ src:x.currentSrc || x.src, alt:x.alt, cap:x.parentElement.querySelector('figcaption')?.textContent || '' })), i);
+    img.onclick = open; img.onkeydown = e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); open(); } }; });
   // the park music steps aside while a video plays; only one video plays at a time
   const vids = [...$('#pMedia').querySelectorAll('video')];
   vids.forEach(v => { v.addEventListener('play', () => { pauseMusic(); vids.forEach(o => o !== v && o.pause()); });
@@ -1185,6 +1212,25 @@ let snapCam = false;
 
 /* ───────────── INPUT ───────────── */
 const keys = {};
+
+/* ───────────── PICTURE VIEWER ───────────── */
+let vIdx = 0, vN = 0, vReturn = null;
+function vGo(i, smooth = true){ vIdx = Math.max(0, Math.min(vN - 1, i)); const st = $('#vStrip'); if (!smooth){ st.scrollLeft = vIdx * st.clientWidth; vUpdate(); return; } st.scrollTo({ left:vIdx * st.clientWidth, behavior:smooth ? 'smooth' : 'auto' }); vUpdate(); }
+function vUpdate(){ $('#vCount').textContent = vN > 1 ? `${vIdx + 1} / ${vN}` : ''; $('#vPrev').disabled = vIdx <= 0; $('#vNext').disabled = vIdx >= vN - 1; $('#vPrev').hidden = $('#vNext').hidden = vN < 2; }
+function openViewer(list, i){
+  vReturn = document.activeElement; vN = list.length;
+  $('#vStrip').innerHTML = list.map(p => `<figure class="vslide"><img src="${esc(p.src)}" alt="${esc(p.alt)}">${p.cap ? `<figcaption>${esc(p.cap)}</figcaption>` : ''}</figure>`).join('');
+  $('#viewer').hidden = false; vGo(i, false); requestAnimationFrame(() => vGo(vIdx, false)); $('#vClose').focus({ preventScroll:true });
+}
+function closeViewer(){ $('#viewer').hidden = true; $('#vStrip').innerHTML = ''; vReturn && vReturn.focus && vReturn.focus({ preventScroll:true }); }
+$('#vClose').onclick = closeViewer; $('#vPrev').onclick = () => vGo(vIdx - 1); $('#vNext').onclick = () => vGo(vIdx + 1);
+$('#vStrip').addEventListener('scroll', () => { const st = $('#vStrip'), i = Math.round(st.scrollLeft / st.clientWidth); if (i !== vIdx){ vIdx = i; vUpdate(); } }, { passive:true });
+$('#vStrip').addEventListener('click', e => { if (!e.target.closest('img, figcaption')) closeViewer(); });   // click the dark background to close
+addEventListener('resize', () => { if (!$('#viewer').hidden) vGo(vIdx, false); });
+addEventListener('keydown', e => { if ($('#viewer').hidden) return;
+  if (e.key === 'Escape'){ closeViewer(); e.stopImmediatePropagation(); e.preventDefault(); }
+  else if (e.key === 'ArrowRight'){ vGo(vIdx + 1); e.stopImmediatePropagation(); e.preventDefault(); }
+  else if (e.key === 'ArrowLeft'){ vGo(vIdx - 1); e.stopImmediatePropagation(); e.preventDefault(); } }, true);
 addEventListener('keydown', e => {
   if (e.key === 'Escape'){ if (!$('#intro').hidden) return; closeVeil(); return; }
   if (e.code === 'KeyD' && e.shiftKey){ toggleDebug(); return; }
