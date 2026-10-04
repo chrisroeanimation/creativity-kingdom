@@ -97,7 +97,9 @@ a{color:var(--navy)}
 .tags span{padding:5px 13px;font-size:13px;font-weight:700}
 .tags{justify-content:center}
 .card p{margin:0;font-size:17px;line-height:1.62;max-width:62ch}
-.gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr));gap:14px}
+@media (max-width:520px){.gallery{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}}
+#pMedia .gallery img{aspect-ratio:4/3;object-fit:cover}
 .gallery img,.card video{width:100%;max-width:100%;border-radius:18px;border:3px solid var(--navy-deep);display:block;background:var(--cream-2)}
 .gallery img.wide,.gallery figure.wide{grid-column:1/-1}
 .card video{aspect-ratio:16/9;background:var(--navy-deep);object-fit:contain}
@@ -482,13 +484,13 @@ let shownProject = null;
 function renderMedia(p){
   const m = p.media || { items:[], images:[] };
   p.mediaShown = !!p.media;
-  let media = '', gallery = [], firstImage = true;
+  let media = "", gallery = [];
   const flush = () => { if (!gallery.length) return; media += `<div class="gallery">${gallery.join('')}</div>`; gallery = []; };
   for (const it of m.items){
     if (it.video){ flush();
       media += `<figure class="vid">${it.title ? `<figcaption class="vtitle">${esc(it.title)}</figcaption>` : ''}<video controls playsinline preload="metadata" src="${esc(it.src)}"${it.poster ? ` poster="${esc(it.poster)}"` : ''}></video></figure>`; }
     else { const c = it.title || '';
-      gallery.push(`<figure class="${firstImage && m.images.length > 1 ? 'wide' : ''}"><img src="${esc(it.src)}" alt="${esc(c || p.title + ' picture')}" loading="lazy">${c ? `<figcaption>${esc(c)}</figcaption>` : ''}</figure>`); firstImage = false; }
+      gallery.push(`<figure><img src="${esc(it.src)}" alt="${esc(c || p.title + ' picture')}" loading="lazy">${c ? `<figcaption>${esc(c)}</figcaption>` : ''}</figure>`); }
   }
   flush();
   if (p.portrait && !m.images.length) media += `<div class="gallery" style="grid-template-columns:minmax(0,180px);justify-content:center"><img src="img/portrait.jpg" alt="Chris Roe"></div>`;
