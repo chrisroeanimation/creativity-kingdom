@@ -1141,7 +1141,7 @@ function buildFromGLTF(gltf){
 
 // Trains: a chain lift up the points named …_Lift, then gravity: slow over crests, fast in the dips. Cars follow the track frames.
 const COASTER_LIFT = 3.6, COASTER_MIN = 4.2, COASTER_PACE = .9;   // lift speed and slowest speed (metres per second); PACE shapes the gravity part
-const COASTER_SPEED = { Red:2 };   // per-track multiplier by path name (the Showreel Coaster runs twice as fast); others 1
+const COASTER_SPEED = { Red:2, Blue:2 };   // per-track multiplier by path name: Red = Showreel Coaster, Blue = Chaos Castle; others 1
 const pose = { pos:new THREE.Vector3(), fwd:new THREE.Vector3(), up:new THREE.Vector3() };
 const basis = new THREE.Matrix4(), xAxis = new THREE.Vector3();
 function stepTrains(dt){
