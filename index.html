@@ -866,7 +866,10 @@ async function loadPark(){
   for (const f of PARK_FILES){
     try {
       const raw = await fetchWithProgress(f);
-      if (f.endsWith('.json')){ const bin = atob(JSON.parse(new TextDecoder().decode(raw)).data); bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i); }
+      if (f.endsWith('.json')){ const j = JSON.parse(new TextDecoder().decode(raw));
+        // the preview copy may be split into parts (each a slice of the base64 text)
+        let b64 = j.data || ''; if (j.parts) for (const part of j.parts) b64 += JSON.parse(new TextDecoder().decode(await fetchWithProgress(part))).data;
+        const bin = atob(b64); bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i); }
       else { if (raw[0] !== 0x67 || raw[1] !== 0x6c || raw[2] !== 0x54 || raw[3] !== 0x46) throw new Error(f + ' is not a GLB'); bytes = raw; }   // 'glTF'
       break;
     } catch (e){ err = e; }
@@ -932,6 +935,7 @@ function buildFromGLTF(gltf){
   byRe(/^Cloud(_\d+)?$/).forEach(mark);
   byRe(/^FloatingEye(_\d+)?$/).forEach(mark);
   byRe(/^CoasterCar_\d+/).forEach(mark);
+  byRe(/^DropCar$/).forEach(mark);
   byRe(/^Spin_[XYZ]_-?\d+/i).forEach(mark);
   const avatarNames = new Set(); if (avatar) avatar.traverse(o => avatarNames.add(o.name));
   const sceneClips = gltf.animations.filter(c => !c.tracks.some(t => avatarNames.has(t.name.split('.')[0])));
@@ -957,7 +961,9 @@ function buildFromGLTF(gltf){
     const owner = path.parent;
     owner.children.filter(o => /^Coaster(Rail|Ties|Support|Spine)/.test(o.name)).forEach(o => owner.remove(o));
     const cars = owner.children.filter(o => /^CoasterCar_\d+/.test(o.name)).sort(numeric);
-    tracks.push({ fr, cars, s: rnd(0, 1), hmax: Math.max(...fr.P.map(p => p.y)) + 1.5, inverted: /Inverted/i.test(path.name) });
+    // samples that follow a point named …_Lift are on the chain lift
+    const liftPt = kids.map(o => /_Lift/i.test(o.name)), lift = fr.K ? fr.K.map(k => liftPt[Math.floor(k) % kids.length] ? 1 : 0) : fr.P.map(() => 0);
+    tracks.push({ fr, cars, s: rnd(0, 1), lift, htop: Math.max(...fr.P.map(p => p.y)) + .6, inverted: /Inverted/i.test(path.name), speed: Object.entries(COASTER_SPEED).find(([k]) => path.name.includes(k))?.[1] || 1 });
   });
   byRe(/^Coaster(Rail|Ties|Support|Spine)(_\d+)?$/).forEach(o => o.parent && o.parent.remove(o));
   root.updateMatrixWorld(true);
@@ -1097,23 +1103,56 @@ function buildFromGLTF(gltf){
     } }); }
 
   // ── snow over the grotto ──
+  // a big snow cloud parks over the grotto (a copy of the knobbliest drifting cloud), and the snow falls from it
   const grotto = first('Ride_WinterGrotto');
-  if (grotto) addSnow(grotto.getWorldPosition(new THREE.Vector3()));
+  if (grotto){
+    const gp = grotto.getWorldPosition(new THREE.Vector3());
+    const vcount = o => { let n = 0; o.traverse(m => { if (m.isMesh) n += m.geometry.attributes.position.count; }); return n; };
+    const src = clouds.slice().sort((a, b) => vcount(b.o) - vcount(a.o))[0];
+    let top = 16;
+    if (src){
+      const sc = src.o.clone(true), cm = src.m.clone(); cm.onBeforeCompile = clayCompile; sc.traverse(m => { if (m.isMesh){ m.material = cm; m.castShadow = false; } });
+      sc.position.set(0, 0, 0); sc.updateMatrixWorld(true);
+      const b0 = new THREE.Box3().setFromObject(sc), size = b0.getSize(new THREE.Vector3()), k = 25 / Math.max(size.x, size.z);
+      sc.scale.multiplyScalar(k); sc.updateMatrixWorld(true);
+      const b1 = new THREE.Box3().setFromObject(sc), c1 = b1.getCenter(new THREE.Vector3());
+      sc.position.set(gp.x - c1.x, 18 - b1.min.y, gp.z - c1.z); scene.add(sc);
+      clouds.push({ o:sc, sp:0, m:cm, r:Math.max(b1.max.x - b1.min.x, b1.max.z - b1.min.z) * .55, cy:(b1.max.y - b1.min.y) / 2, op:1, still:true });
+      top = 18.6;
+    }
+    addSnow(gp, top);
+  }
+
+  // the mine-shaft drop tower behind Strike: the cage winds up slowly, waits at the top, drops, brakes and rests
+  const dropCar = first('DropCar');
+  if (dropCar){ scene.attach(dropCar); const y0 = dropCar.position.y, RISE = 15.2;
+    updaters.push((dt, t) => { const T = t % 15; let h;
+      if (T < 3) h = 0;                                                  // loading at the bottom
+      else if (T < 10){ const u = (T - 3) / 7; h = RISE * u * u * (3 - 2 * u); }   // winding up
+      else if (T < 12) h = RISE;                                         // the pause at the top
+      else { const f = T - 12, fall = 0.5 * 9.8 * f * f;                 // the drop, then the brakes
+        if (fall < RISE - 3.2) h = RISE - fall; else { const tb = Math.sqrt(2 * (RISE - 3.2) / 9.8), v = 9.8 * tb, d = f - tb, stop = 2 * 3.2 / v;
+          h = d >= stop ? 0 : 3.2 - (v * d - v * d * d / (2 * stop)); } }
+      dropCar.position.y = y0 + h; }); }
 
   // ── the player ──
   if (avatar) setupPlayer(avatar, gltf.animations.filter(c => c.tracks.some(t => avatarNames.has(t.name.split('.')[0]))));
 }
 
-// Trains: gravity-ish speed, a chain lift on steep climbs, cars follow the track frames.
+// Trains: a chain lift up the points named …_Lift, then gravity: slow over crests, fast in the dips. Cars follow the track frames.
+const COASTER_LIFT = 3.6, COASTER_MIN = 4.2, COASTER_PACE = .9;   // lift speed and slowest speed (metres per second); PACE shapes the gravity part
+const COASTER_SPEED = { Red:2 };   // per-track multiplier by path name (the Showreel Coaster runs twice as fast); others 1
 const pose = { pos:new THREE.Vector3(), fwd:new THREE.Vector3(), up:new THREE.Vector3() };
 const basis = new THREE.Matrix4(), xAxis = new THREE.Vector3();
 function stepTrains(dt){
   for (const tr of tracks){
     coasterPose(THREE, tr.fr, tr.s, pose);
-    let v = 6 + Math.sqrt(Math.max(0, 2 * 9.8 * (tr.hmax - pose.pos.y))) * .95;
-    if (pose.fwd.y > .35) v = Math.min(v, 7);
+    // speed: a steady chain lift, then like a real train: slow over the tops, fastest at the bottom
+    const onLift = tr.lift[Math.floor(((tr.s % 1) + 1) % 1 * tr.fr.N)];
+    let v = onLift ? COASTER_LIFT : Math.sqrt(COASTER_MIN * COASTER_MIN + 2 * 9.8 * Math.max(0, tr.htop - pose.pos.y)) * COASTER_PACE;
+    v *= tr.speed;
     if (reduceMotion) v *= .5;
-    tr.v = tr.v == null ? v : tr.v + (v - tr.v) * (1 - Math.exp(-dt * 2.5));   // eased, so speed changes glide
+    tr.v = tr.v == null ? v : tr.v + (v - tr.v) * (1 - Math.exp(-dt * (onLift ? 3 : 1.6)));   // eased, so speed changes glide
     tr.s = (tr.s + tr.v * dt / tr.fr.length) % 1;
     tr.cars.forEach((c, i) => {
       coasterPose(THREE, tr.fr, tr.s - i * 2.7 / tr.fr.length, pose);
@@ -1180,12 +1219,12 @@ function makeFairyLights(mesh){
 }
 updaters.push((dt, t) => { fairyUniforms.uTime.value = t; fairyUniforms.uScale.value = renderer.domElement.height * .5; });
 
-function addSnow(c){
+function addSnow(c, top = 16){
   const N = 500, pos = new Float32Array(N * 3);
-  for (let i = 0; i < N; i++){ const a = rnd(6.3), r = Math.sqrt(rnd()) * 10; pos[i*3] = c.x + Math.cos(a) * r; pos[i*3+1] = rnd(0, 16); pos[i*3+2] = c.z + Math.sin(a) * r; }
+  for (let i = 0; i < N; i++){ const a = rnd(6.3), r = Math.sqrt(rnd()) * 10; pos[i*3] = c.x + Math.cos(a) * r; pos[i*3+1] = rnd(0, top); pos[i*3+2] = c.z + Math.sin(a) * r; }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color:'#ffffff', size:.28, transparent:true, opacity:.9, depthWrite:false })));
-  updaters.push((dt, t) => { for (let i = 0; i < N; i++){ pos[i*3+1] -= dt * (1.2 + (i % 5) * .2); pos[i*3] += Math.sin(t + i) * dt * .2; if (pos[i*3+1] < .3) pos[i*3+1] = 16; } g.attributes.position.needsUpdate = true; });
+  updaters.push((dt, t) => { for (let i = 0; i < N; i++){ pos[i*3+1] -= dt * (1.2 + (i % 5) * .2); pos[i*3] += Math.sin(t + i) * dt * .2; if (pos[i*3+1] < .3) pos[i*3+1] = top; } g.attributes.position.needsUpdate = true; });
 }
 
 /* ───────────── PLAYER ───────────── */
@@ -1354,7 +1393,7 @@ function stepToys(dt, t){
     const sq = moving ? 1 + Math.sin(t*18 + w.ph)*.06 : 1 + Math.sin(t*2 + w.ph)*.03;
     w.g.scale.set(w.s0.x/Math.sqrt(sq), w.s0.y*sq, w.s0.z/Math.sqrt(sq));
   }
-  for (const c of clouds){ c.o.position.x += dt * c.sp; if (c.o.position.x > 75) c.o.position.x = -75;
+  for (const c of clouds){ if (!c.still){ c.o.position.x += dt * c.sp; if (c.o.position.x > 75) c.o.position.x = -75; }
     // clouds turn see-through when they drift between the camera and the player
     cloudC.copy(c.o.position); cloudC.y += c.cy; cloudSeg.set(camPos, look); cloudSeg.closestPointToPoint(cloudC, true, cloudP);
     const want = cloudP.distanceTo(cloudC) < c.r ? .12 : .96; c.op += (want - c.op) * (1 - Math.exp(-dt * 5)); c.m.opacity = c.op; }
