@@ -601,7 +601,7 @@ let musicOn = true; try { musicOn = localStorage.getItem('parkMusic') !== 'off';
 function showMusic(){ $('#musicBtn').setAttribute('aria-pressed', musicOn); $('#musicBtn').setAttribute('aria-label', musicOn ? 'Mute music' : 'Play music'); $('#musicOff').style.display = musicOn ? 'none' : ''; }
 function startMusic(){ if (musicOn) playMusic(); }
 // Entering the park: a short intro sting, then the music crossfades in over its last 0.2 s.
-const INTRO_URL = 'audio/intro.mp3', INTRO_VOL = .55, INTRO_XFADE = 0.2;
+const INTRO_URL = 'audio/intro.mp3', INTRO_VOL = .55, INTRO_XFADE = 0.15;
 const iBytes = fetch(INTRO_URL).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null);
 let iBuf = null;
 // decode the sting ahead of time (an offline context needs no click), so it plays the instant the visitor enters
