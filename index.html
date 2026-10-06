@@ -72,6 +72,8 @@ a{color:var(--navy)}
 
 .joy{position:fixed;left:24px;bottom:calc(env(safe-area-inset-bottom,0px) + 24px);width:124px;height:124px;border-radius:50%;background:rgba(16,22,74,.35);border:3px solid rgba(251,245,232,.7);z-index:6;display:none;touch-action:none}
 .touch .joy{display:block}
+.joy,.hint,.keys{transition:opacity .45s ease}
+.cine .joy,.cine .hint,.cine .keys{opacity:0;pointer-events:none}
 .joy i{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;background:var(--cream);box-shadow:0 4px 0 var(--navy-deep);border:3px solid var(--navy-deep)}
 .touch .prompt{bottom:calc(env(safe-area-inset-bottom,0px) + 170px)}
 
@@ -556,7 +558,7 @@ $('#workBtn').onclick = () => openVeil('#work');
 $('#mapBtn').onclick = () => openVeil('#map');
 $('#contactBtn').onclick = () => openVeil('#contact');
 $('#skipBtn').onclick = () => { $('#intro').hidden = true; openVeil('#work'); startMusic(); };
-$('#enterBtn').onclick = () => { $('#intro').hidden = true; uiOpen=false; canvas.focus(); startMusic(); };
+$('#enterBtn').onclick = () => { $('#intro').hidden = true; uiOpen=false; canvas.focus(); startMusic(); startCine(); };
 // background music: starts when the visitor enters (browsers need a click first); the note button mutes it
 // Background music. Played through Web Audio so the loop is sample-accurate (an <audio> loop leaves a
 // small gap from the MP3's padding); the <audio> element is only a fallback for old browsers.
@@ -819,6 +821,7 @@ const zones = [];
 const faders = [], fadeRay = new THREE.Ray(), fadeHit = new THREE.Vector3();   // Fade_… meshes: turn see-through when they block the camera's view of the player
 let HALF_X = 60, HALF_Z = 60;
 const spawn = { x:0, z:54, h:0 };
+const START_TURN = -0.18;   // the character's face sits a little off its forward axis: this turns it to look straight at the camera at the start
 const rnd = (a = 0, b = 1) => a + Math.random() * (b - a);
 
 // Footprint colliders from a mesh's world-space vertices (principal-axis fit, chains for long shapes).
@@ -912,7 +915,7 @@ function buildFromGLTF(gltf){
 
   // Spawn
   const sp = first('Spawn');
-  if (sp){ const p = new THREE.Vector3(), q = new THREE.Quaternion(); sp.getWorldPosition(p); sp.getWorldQuaternion(q); const f = new THREE.Vector3(0,0,1).applyQuaternion(q); spawn.x = p.x; spawn.z = p.z; spawn.h = Math.atan2(f.x, f.z); }
+  if (sp){ const p = new THREE.Vector3(), q = new THREE.Quaternion(); sp.getWorldPosition(p); sp.getWorldQuaternion(q); const f = new THREE.Vector3(0,0,1).applyQuaternion(q); spawn.x = p.x; spawn.z = p.z; spawn.h = Math.atan2(f.x, f.z) + START_TURN; }
 
   // Player (falls back to the bumper car if there's no Player)
   let avatar = first('Player');
@@ -1295,6 +1298,21 @@ const joy = { x:0, y:0, id:null };
   el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end); }
 // zoom: starts pulled back so the park reads at a glance; mouse wheel on desktop, pinch on touch screens
 const ZOOM_MIN = .12, ZOOM_MAX = 2.1, ZOOM_GUEST = .6;   // below ZOOM_GUEST the camera eases down to guest height
+// camera framing for a zoom level (0 = overview … 1 = guest's-eye view in imm)
+function camParams(z, portrait){
+  const imm = THREE.MathUtils.smootherstep(ZOOM_GUEST - z, 0, ZOOM_GUEST - ZOOM_MIN);
+  const ovY = portrait ? 44 : 30, ovZ = portrait ? 40 : 36, zOver = Math.max(z, ZOOM_GUEST);
+  return { imm,
+    pitch: THREE.MathUtils.lerp(Math.atan2(ovY, ovZ), Math.atan2(0.6, portrait ? 24 : 22.5), imm),
+    dist: THREE.MathUtils.lerp(Math.hypot(ovY, ovZ) * zOver, portrait ? 24 : 22.5, imm),
+    ty: THREE.MathUtils.lerp(1.5, 2.9, imm), ahead: THREE.MathUtils.lerp(5, 14, imm),
+    fov: THREE.MathUtils.lerp(36, portrait ? 74 : 64, imm) };
+}
+// Entering the park: hold close on the character, then rise to the usual view; the controls appear once it lands.
+const CINE_HOLD = 0.8, CINE_RISE = 2.0;   // hold close for 0.8 s, then rise: most of the move in ~1.6 s, the last ~0.4 s a slow settle
+let cine = null;
+function startCine(){ if (reduceMotion){ endCine(); return; } cine = { t:0 }; document.body.classList.add('cine'); snapCam = true; }
+function endCine(){ cine = null; document.body.classList.remove('cine'); }
 const camGuestOff = new THREE.Vector3(), camGuestLook = new THREE.Vector3();
 let zoom = isTouch ? 1.45 : 1.35, zoomS = zoom;   // zoom = target, zoomS = eased value the camera uses
 canvas.addEventListener('wheel', e => { e.preventDefault(); zoom = THREE.MathUtils.clamp(zoom * (1 + THREE.MathUtils.clamp(e.deltaY, -120, 120) * .0012), ZOOM_MIN, ZOOM_MAX); }, { passive:false });
@@ -1330,7 +1348,7 @@ function declutterPins(){
 addEventListener('resize', () => { if (!$('#map').hidden) declutterPins(); });
 $('#mapBtn').addEventListener('click', () => { requestAnimationFrame(declutterPins); $('#youPin').style.left = ((pl.x + MAP_HALF) / (MAP_HALF * 2) * 100) + '%'; $('#youPin').style.top = ((pl.z + MAP_HALF) / (MAP_HALF * 2) * 100) + '%'; });
 function goTo(id){
-  if (id === 'start') resetPlayer(); else { const z = zones.find(z => z.id === id); pl.x = z.x; pl.z = z.z + .5; pl.vx = pl.vz = 0; pl.h = 0; snapCam = true; }
+  if (id === 'start') resetPlayer(); else { const z = zones.find(z => z.id === id); pl.x = z.x; pl.z = z.z + .5; pl.vx = pl.vz = 0; pl.h = START_TURN; snapCam = true; }
   closeVeil(); }
 $('#maplist').addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) goTo(b.dataset.go); });
 
@@ -1340,7 +1358,7 @@ function pushOut(o, r){ for (const c of colliders){ const dx = o.x - c.x, dz = o
 const RUN = 12.5;                  // top speed, metres per second (was 11)
 function stepPlayer(dt){
   let ix = 0, iz = 0;
-  if (!uiOpen){
+  if (!uiOpen && !cine){
     if (keys.ArrowUp || keys.KeyW) iz -= 1;
     if (keys.ArrowDown || keys.KeyS) iz += 1;
     if (keys.ArrowLeft || keys.KeyA) ix -= 1;
@@ -1449,16 +1467,17 @@ function frame(){
   const portrait = innerHeight > innerWidth;
   // Zooming right in lowers the camera to a guest's-eye view: level, just behind your character, with a wider lens.
   zoomS += (zoom - zoomS) * (1 - Math.exp(-dt * 5));
-  const imm = THREE.MathUtils.smootherstep(ZOOM_GUEST - zoomS, 0, ZOOM_GUEST - ZOOM_MIN);        // 0 = overview, 1 = guest view
   // overview: pitched down ~40-48°, distance scales with zoom; guest: almost level, 22 m back from a point 14 m ahead.
   // Interpolating pitch and distance (rather than positions) makes the camera swing down along an arc.
-  const ovY = portrait ? 44 : 30, ovZ = portrait ? 40 : 36, zOver = Math.max(zoomS, ZOOM_GUEST);
-  const pitch = THREE.MathUtils.lerp(Math.atan2(ovY, ovZ), Math.atan2(0.6, portrait ? 24 : 22.5), imm);
-  const dist = THREE.MathUtils.lerp(Math.hypot(ovY, ovZ) * zOver, portrait ? 24 : 22.5, imm);
-  const off = camGuestOff.set(0, Math.sin(pitch) * dist, Math.cos(pitch) * dist);
+  let cp = camParams(zoomS, portrait);
+  // the opening shot: a beat close up on the character, then one smooth rise to the usual view
+  if (cine){ cine.t += dt; const u = THREE.MathUtils.clamp((cine.t - CINE_HOLD) / CINE_RISE, 0, 1), e = u <= 0 ? 0 : u >= 1 ? 1 : u * u * u / (u * u * u + (1 - u) * (1 - u));   // gentle start, long soft landing
+    const a0 = camParams(ZOOM_MIN, portrait), a1 = camParams(zoom, portrait); for (const k in cp) cp[k] = THREE.MathUtils.lerp(a0[k], a1[k], e);
+    zoomS = zoom; snapCam = true; if (u >= 1) endCine(); }
+  const off = camGuestOff.set(0, Math.sin(cp.pitch) * cp.dist, Math.cos(cp.pitch) * cp.dist);
   const vel = new THREE.Vector3(pl.vx, 0, pl.vz).multiplyScalar(.2);
-  const tgt = new THREE.Vector3(pl.x, THREE.MathUtils.lerp(pl.y * .4 + 1.5, 2.9, imm), pl.z - THREE.MathUtils.lerp(5, 14, imm)).add(vel);
-  const fov = THREE.MathUtils.lerp(36, portrait ? 74 : 64, imm);
+  const tgt = new THREE.Vector3(pl.x, cp.ty + (1 - cp.imm) * pl.y * .4, pl.z - cp.ahead).add(vel);
+  const fov = cp.fov;
   if (Math.abs(camera.fov - fov) > .01){ camera.fov = fov; camera.updateProjectionMatrix(); }
   const k = snapCam ? 1 : 1 - Math.exp(-dt * (reduceMotion ? 8 : 4)); snapCam = false;
   look.lerp(tgt, k); camPos.lerp(tgt.clone().add(off), k);
