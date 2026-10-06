@@ -601,7 +601,10 @@ let musicOn = true; try { musicOn = localStorage.getItem('parkMusic') !== 'off';
 function showMusic(){ $('#musicBtn').setAttribute('aria-pressed', musicOn); $('#musicBtn').setAttribute('aria-label', musicOn ? 'Mute music' : 'Play music'); $('#musicOff').style.display = musicOn ? 'none' : ''; }
 function startMusic(){ if (musicOn) playMusic(); }
 // Entering the park: a short intro sting, then the music crossfades in over its last 0.2 s.
-const INTRO_URL = 'audio/intro.mp3', INTRO_VOL = .9, INTRO_XFADE = 0.1;
+const INTRO_URL = 'audio/intro.mp3', INTRO_VOL = 2, INTRO_XFADE = 0.1;   // the sting is recorded quietly, so it's boosted (4 = +12 dB)
+// When the sting starts, in seconds after the camera starts its opening move. Default: the moment the camera starts to rise,
+// so the swell builds with the rise and peaks just as the camera lands. The camera times itself from the sound's start, so they stay in step.
+const INTRO_AT = null;   // null = CINE_HOLD
 const iBytes = fetch(INTRO_URL).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null);
 let iBuf = null;
 // decode the sting ahead of time (an offline context needs no click), so it plays the instant the visitor enters
@@ -616,7 +619,8 @@ async function startIntro(){
   try {
     await iReady; if (!iBuf) throw 0;
     await actx.resume();
-    const src = actx.createBufferSource(), g = actx.createGain(), now = actx.currentTime + 0.03, len = iBuf.b - iBuf.a, end = now + len;
+    const t0 = actx.currentTime + 0.03, now = t0 + (INTRO_AT ?? CINE_HOLD), src = actx.createBufferSource(), g = actx.createGain(), len = iBuf.b - iBuf.a, end = now + len;
+    if (cine) cine.w0 = performance.now() + (t0 - actx.currentTime) * 1000;   // line the camera's clock up with the sound's start
     src.buffer = iBuf; src.connect(g); g.connect(actx.destination);
     g.gain.setValueAtTime(INTRO_VOL, now); g.gain.setValueAtTime(INTRO_VOL, end - INTRO_XFADE); g.gain.linearRampToValueAtTime(0, end);
     src.start(now, iBuf.a, len);
@@ -1336,7 +1340,7 @@ function camParams(z, portrait){
 const CINE_BACK = 12;   // the opening shot starts this many metres further back than the zoomed-in view, to take in the gates and rides
 const CINE_HOLD = 0.8, CINE_RISE = 2.0;   // hold close for 0.8 s, then rise: most of the move in ~1.6 s, the last ~0.4 s a slow settle
 let cine = null;
-function startCine(){ if (reduceMotion){ endCine(); return; } cine = { t:0 }; document.body.classList.add('cine'); snapCam = true; }
+function startCine(){ if (reduceMotion){ endCine(); return; } cine = { t:0, w0:performance.now() }; document.body.classList.add('cine'); snapCam = true; }
 function endCine(){ cine = null; document.body.classList.remove('cine'); }
 const camGuestOff = new THREE.Vector3(), camGuestLook = new THREE.Vector3();
 let zoom = isTouch ? 1.45 : 1.35, zoomS = zoom;   // zoom = target, zoomS = eased value the camera uses
@@ -1496,7 +1500,9 @@ function frame(){
   // Interpolating pitch and distance (rather than positions) makes the camera swing down along an arc.
   let cp = camParams(zoomS, portrait);
   // the opening shot: a beat close up on the character, then one smooth rise to the usual view
-  if (cine){ cine.t += dt; const u = THREE.MathUtils.clamp((cine.t - CINE_HOLD) / CINE_RISE, 0, 1), e = u <= 0 ? 0 : u >= 1 ? 1 : u * u * u / (u * u * u + (1 - u) * (1 - u));   // gentle start, long soft landing
+  if (cine){
+    // real (wall-clock) time, not frame time, so the move keeps pace with the sound even if frames stutter
+    cine.t = (performance.now() - cine.w0) / 1000; const u = THREE.MathUtils.clamp((cine.t - CINE_HOLD) / CINE_RISE, 0, 1), e = u <= 0 ? 0 : u >= 1 ? 1 : u * u * u / (u * u * u + (1 - u) * (1 - u));   // gentle start, long soft landing
     const a0 = camParams(ZOOM_MIN, portrait), a1 = camParams(zoom, portrait); a0.dist += CINE_BACK; for (const k in cp) cp[k] = THREE.MathUtils.lerp(a0[k], a1[k], e);
     zoomS = zoom; snapCam = true; if (u >= 1) endCine(); }
   const off = camGuestOff.set(0, Math.sin(cp.pitch) * cp.dist, Math.cos(cp.pitch) * cp.dist);
