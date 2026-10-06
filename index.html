@@ -558,7 +558,7 @@ $('#workBtn').onclick = () => openVeil('#work');
 $('#mapBtn').onclick = () => openVeil('#map');
 $('#contactBtn').onclick = () => openVeil('#contact');
 $('#skipBtn').onclick = () => { $('#intro').hidden = true; openVeil('#work'); startMusic(); };
-$('#enterBtn').onclick = () => { $('#intro').hidden = true; uiOpen=false; canvas.focus(); startMusic(); startCine(); };
+$('#enterBtn').onclick = () => { $('#intro').hidden = true; uiOpen=false; canvas.focus(); startIntro(); startCine(); };
 // background music: starts when the visitor enters (browsers need a click first); the note button mutes it
 // Background music. Played through Web Audio so the loop is sample-accurate (an <audio> loop leaves a
 // small gap from the MP3's padding); the <audio> element is only a fallback for old browsers.
@@ -578,16 +578,17 @@ async function musicReady(){
     mBuf.loopA = a / mBuf.sampleRate; mBuf.loopB = (z + 1) / mBuf.sampleRate;
   } catch (e){ mFallback = true; }
 }
-async function playMusic(){
+async function playMusic(at = 0, fade = 0.5){   // at: audio-clock time to start (0 = now); fade: seconds to ease in
   // create/resume the audio context inside the click itself (Safari insists), then finish loading
   if (!mFallback){ const AC = window.AudioContext || window.webkitAudioContext; if (AC && !actx) actx = new AC(); if (actx) actx.resume().catch(() => {}); }
   await musicReady();
   if (mFallback){ music.volume = 0; music.play().then(() => { const t0 = performance.now(); const step = now => { const k = Math.min(1, (now - t0) / 500); music.volume = MUSIC_VOL * k * k * (3 - 2 * k); if (k < 1) requestAnimationFrame(step); }; requestAnimationFrame(step); }).catch(() => {}); return; }
   clearTimeout(mStopT);
   try { await actx.resume(); } catch (e) {}
-  if (!mSrc){ mSrc = actx.createBufferSource(); mSrc.buffer = mBuf; mSrc.loop = true; mSrc.loopStart = mBuf.loopA; mSrc.loopEnd = mBuf.loopB; mSrc.connect(mGain); mSrc.start(0, mBuf.loopA); }
-  const g = mGain.gain, now = actx.currentTime;   // ease in over half a second
-  g.cancelScheduledValues(now); g.setValueAtTime(g.value, now); g.linearRampToValueAtTime(MUSIC_VOL, now + 0.5);
+  const now = actx.currentTime, t0 = Math.max(now, at);
+  if (!mSrc){ mSrc = actx.createBufferSource(); mSrc.buffer = mBuf; mSrc.loop = true; mSrc.loopStart = mBuf.loopA; mSrc.loopEnd = mBuf.loopB; mSrc.connect(mGain); mSrc.start(t0, mBuf.loopA); }
+  const g = mGain.gain;   // ease in (half a second by default)
+  g.cancelScheduledValues(now); g.setValueAtTime(g.value, now); if (t0 > now) g.setValueAtTime(g.value, t0); g.linearRampToValueAtTime(MUSIC_VOL, t0 + fade);
 }
 window.__music = () => ({ state: actx && actx.state, gain: mGain && +mGain.gain.value.toFixed(2), loop: mBuf && [mBuf.loopA, mBuf.loopB, mBuf.duration], fallback: mFallback });
 function pauseMusic(){
@@ -599,6 +600,30 @@ function pauseMusic(){
 let musicOn = true; try { musicOn = localStorage.getItem('parkMusic') !== 'off'; } catch (e) {}
 function showMusic(){ $('#musicBtn').setAttribute('aria-pressed', musicOn); $('#musicBtn').setAttribute('aria-label', musicOn ? 'Mute music' : 'Play music'); $('#musicOff').style.display = musicOn ? 'none' : ''; }
 function startMusic(){ if (musicOn) playMusic(); }
+// Entering the park: a short intro sting, then the music crossfades in over its last 0.2 s.
+const INTRO_URL = 'audio/intro.mp3', INTRO_VOL = .9, INTRO_XFADE = 0.1;
+const iBytes = fetch(INTRO_URL).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null);
+let iBuf = null;
+// decode the sting ahead of time (an offline context needs no click), so it plays the instant the visitor enters
+const iReady = iBytes.then(async bytes => { const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext; if (!bytes || !OAC) return;
+  const b = await new OAC(2, 1, 48000).decodeAudioData(bytes); const d = b.getChannelData(0); let a = 0, z = d.length - 1;
+  while (a < d.length && Math.abs(d[a]) < 1e-4) a++; while (z > a && Math.abs(d[z]) < 1e-4) z--; b.a = a / b.sampleRate; b.b = (z + 1) / b.sampleRate; iBuf = b; }).catch(() => {});
+async function startIntro(){
+  if (!musicOn) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC || mFallback){ playMusic(); return; }
+  if (!actx) actx = new AC(); actx.resume().catch(() => {});   // inside the click, for Safari
+  try {
+    await iReady; if (!iBuf) throw 0;
+    await actx.resume();
+    const src = actx.createBufferSource(), g = actx.createGain(), now = actx.currentTime + 0.03, len = iBuf.b - iBuf.a, end = now + len;
+    src.buffer = iBuf; src.connect(g); g.connect(actx.destination);
+    g.gain.setValueAtTime(INTRO_VOL, now); g.gain.setValueAtTime(INTRO_VOL, end - INTRO_XFADE); g.gain.linearRampToValueAtTime(0, end);
+    src.start(now, iBuf.a, len);
+    await musicReady();   // the music finishes loading while the sting plays
+    playMusic(end - INTRO_XFADE, INTRO_XFADE);
+  } catch (e){ playMusic(); }
+}
 $('#musicBtn').onclick = () => { musicOn = !musicOn; try { localStorage.setItem('parkMusic', musicOn ? 'on' : 'off'); } catch (e) {} if (musicOn) playMusic(); else pauseMusic(); showMusic(); };
 document.addEventListener('visibilitychange', () => { if (document.hidden) pauseMusic(); else if (musicOn && $('#intro').hidden) playMusic(); });
 showMusic();
@@ -664,15 +689,14 @@ if (SUN_FROM) sunOffset.copy(SUN_FROM).normalize().multiplyScalar(60);
 scene.add(hemi, sun, sun.target);
 
 /* ───────────── TIME OF DAY ─────────────
-   The light drifts from midday to a golden late afternoon, on to a soft, cool evening, then back again.
+   The light drifts from midday to a warm golden hour, then back again.
    DAY_CYCLE is the length of one full loop in seconds (0 keeps it at midday all the time).
    Each moment is a set of colours and strengths; edit them to taste. */
 const DAY_CYCLE = 120;
 const C = h => new THREE.Color(h);
 const DAY_KEYS = [
   { name:'midday',     from:new THREE.Vector3(0.62, 0.72, 0.30), sun:null /* the park's own sun */, sunK:1.00, sky:C('#f4f1ea'), ground:C('#4f7f4c'), hemiI:1.05, amb:C('#ffd9b0'), ambI:0.35, horizon:C('#a6dcff'), top:C('#06148f'), exp:1.05 },
-  { name:'afternoon',  from:new THREE.Vector3(0.80, 0.42, 0.16), sun:C('#ffcf85'),                       sunK:0.88, sky:C('#fff0dc'), ground:C('#5a8048'), hemiI:1.00, amb:C('#ffcf9e'), ambI:0.42, horizon:C('#ffd8ad'), top:C('#23238a'), exp:1.10 },
-  { name:'evening',    from:new THREE.Vector3(0.72, 0.70, -0.01), sun:C('#b8b8ec'),                      sunK:0.47, sky:C('#d2d6f8'), ground:C('#456461'), hemiI:1.14, amb:C('#cac8ef'), ambI:0.48, horizon:C('#b7bbe4'), top:C('#121665'), exp:1.04 },
+  { name:'golden hour', from:new THREE.Vector3(0.82, 0.38, 0.14), sun:C('#ffbb5c'),                    sunK:1.02, sky:C('#fff0d6'), ground:C('#6a8a44'), hemiI:1.06, amb:C('#ffc184'), ambI:0.5, horizon:C('#ffcf96'), top:C('#3a46a6'), exp:1.2 },
 ];
 const middaySun = { color:new THREE.Color('#fff6ea'), i:2.6 };
 const dayTmp = { v:new THREE.Vector3() };
@@ -683,8 +707,8 @@ function setDaylight(T){
   // 0 → 1 → 0 over one cycle, lingering a little at each end so midday and evening both get their moment
   const ph = DAY_CYCLE > 0 ? (T % DAY_CYCLE) / DAY_CYCLE : 0;
   const w = 0.5 - 0.5 * Math.cos(ph * Math.PI * 2);
-  const seg = w < 0.5 ? 0 : 1, t0 = (w - seg * 0.5) * 2, t = t0 * t0 * (3 - 2 * t0);
-  const k0 = DAY_KEYS[seg], k1 = DAY_KEYS[seg + 1];
+  const t = w * w * (3 - 2 * w);   // midday → golden hour → midday
+  const k0 = DAY_KEYS[0], k1 = DAY_KEYS[1];
   mixKey('sun', k0, k1, t, sun.color); sun.intensity = middaySun.i * THREE.MathUtils.lerp(k0.sunK, k1.sunK, t);
   hemi.color.copy(k0.sky).lerp(k1.sky, t); hemi.groundColor.copy(k0.ground).lerp(k1.ground, t); hemi.intensity = THREE.MathUtils.lerp(k0.hemiI, k1.hemiI, t);
   ambient.color.copy(k0.amb).lerp(k1.amb, t); ambient.intensity = THREE.MathUtils.lerp(k0.ambI, k1.ambI, t);
@@ -1309,6 +1333,7 @@ function camParams(z, portrait){
     fov: THREE.MathUtils.lerp(36, portrait ? 74 : 64, imm) };
 }
 // Entering the park: hold close on the character, then rise to the usual view; the controls appear once it lands.
+const CINE_BACK = 12;   // the opening shot starts this many metres further back than the zoomed-in view, to take in the gates and rides
 const CINE_HOLD = 0.8, CINE_RISE = 2.0;   // hold close for 0.8 s, then rise: most of the move in ~1.6 s, the last ~0.4 s a slow settle
 let cine = null;
 function startCine(){ if (reduceMotion){ endCine(); return; } cine = { t:0 }; document.body.classList.add('cine'); snapCam = true; }
@@ -1472,7 +1497,7 @@ function frame(){
   let cp = camParams(zoomS, portrait);
   // the opening shot: a beat close up on the character, then one smooth rise to the usual view
   if (cine){ cine.t += dt; const u = THREE.MathUtils.clamp((cine.t - CINE_HOLD) / CINE_RISE, 0, 1), e = u <= 0 ? 0 : u >= 1 ? 1 : u * u * u / (u * u * u + (1 - u) * (1 - u));   // gentle start, long soft landing
-    const a0 = camParams(ZOOM_MIN, portrait), a1 = camParams(zoom, portrait); for (const k in cp) cp[k] = THREE.MathUtils.lerp(a0[k], a1[k], e);
+    const a0 = camParams(ZOOM_MIN, portrait), a1 = camParams(zoom, portrait); a0.dist += CINE_BACK; for (const k in cp) cp[k] = THREE.MathUtils.lerp(a0[k], a1[k], e);
     zoomS = zoom; snapCam = true; if (u >= 1) endCine(); }
   const off = camGuestOff.set(0, Math.sin(cp.pitch) * cp.dist, Math.cos(cp.pitch) * cp.dist);
   const vel = new THREE.Vector3(pl.vx, 0, pl.vz).multiplyScalar(.2);
