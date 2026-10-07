@@ -344,7 +344,7 @@ a{color:var(--navy)}
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from './lib/loaders/GLTFLoader.js';
-import { mergeGeometries } from './lib/utils/BufferGeometryUtils.js';
+import { mergeGeometries, toCreasedNormals } from './lib/utils/BufferGeometryUtils.js';
 import { coasterFrames, coasterGeometry, coasterStyle, coasterPose, rollOf } from './coaster.js';
 
 /* ───────────── CONTENT ─────────────
@@ -1020,6 +1020,7 @@ function buildFromGLTF(gltf){
     const CX = 0, CY = (sb.min.y + sb.max.y) / 2 + .75, Z = sb.max.z;
     // warm white bulbs (placed round the logo once its outline is traced)
     const BULB_GAP = .5;
+    const SIGN_CLAY_FINER = 2;   // how much finer the sign's clay texture is than the park's
     const bulbG = new THREE.SphereGeometry(.15, 12, 8), bulbM = new THREE.MeshBasicMaterial({ color:new THREE.Color(1.3, 1.08, .78), toneMapped:false });
     const glowM = new THREE.SpriteMaterial({ color:'#ffd9a0', transparent:true, opacity:.55, depthWrite:false, blending:THREE.AdditiveBlending, map:(() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })() });
     const img = new Image(); img.src = 'img/kingdom-sign.webp';
@@ -1045,7 +1046,9 @@ function buildFromGLTF(gltf){
       const FW = IW >> 1, FH = IH >> 1, fc = new Float32Array(FW * FH * 3), fk = new Uint8Array(FW * FH);
       for (let y = 0; y < FH; y++) for (let x = 0; x < FW; x++){ const o = ((y * 2) * IW + x * 2) * 4, mx = Math.max(px[o], px[o + 1], px[o + 2]);
         if (px[o + 3] > 240 && mx > 140){ const f = y * FW + x; fk[f] = 1; fc[f * 3] = px[o]; fc[f * 3 + 1] = px[o + 1]; fc[f * 3 + 2] = px[o + 2]; } }
-      for (let it = 0; it < 24; it++){ const add = [];
+      // only trust colours well inside a letter: shave 3 pixels off each letter's edge, where the artwork blends into the navy
+      for (let it = 0; it < 3; it++){ const cut = []; for (let y = 1; y < FH - 1; y++) for (let x = 1; x < FW - 1; x++){ const f = y * FW + x; if (fk[f] && (!fk[f - 1] || !fk[f + 1] || !fk[f - FW] || !fk[f + FW])) cut.push(f); } for (const f of cut) fk[f] = 0; }
+      for (let it = 0; it < 30; it++){ const add = [];
         for (let y = 1; y < FH - 1; y++) for (let x = 1; x < FW - 1; x++){ const f = y * FW + x; if (fk[f]) continue; let r = 0, g2 = 0, b = 0, k = 0;
           for (const q of [f - 1, f + 1, f - FW, f + FW]) if (fk[q]){ r += fc[q * 3]; g2 += fc[q * 3 + 1]; b += fc[q * 3 + 2]; k++; }
           if (k) add.push(f, r / k, g2 / k, b / k); }
@@ -1053,7 +1056,12 @@ function buildFromGLTF(gltf){
       const sample = (wx, wy) => { const ix = Math.max(0, Math.min(FW - 1, Math.round((wx / s + IW / 2) / 2))), iy = Math.max(0, Math.min(FH - 1, Math.round((-wy / s + IH / 2) / 2))), f = iy * FW + ix;
         const c = new THREE.Color().setRGB(fc[f * 3] / 255, fc[f * 3 + 1] / 255, fc[f * 3 + 2] / 255, THREE.SRGBColorSpace), h = {}; c.getHSL(h); return c.setHSL(h.h, Math.min(1, h.s * 1.25), h.l * .94); };
       const pieces = [];
-      const addPiece = (geo, colourAt, x, y, z) => { geo.translate(x, y, z); const p = geo.attributes.position, n = p.count, a = new Float32Array(n * 4);
+      const addPiece = (geo, colourAt, x, y, z) => { geo.translate(x, y, z); geo.deleteAttribute('uv'); geo = toCreasedNormals(geo, 1.15);
+        { // the flat front and back stay exactly flat (only the bevel and sides are smoothed), so the faces don't shade in patches
+          const P = geo.attributes.position, N = geo.attributes.normal, A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3();
+          for (let t = 0; t < P.count; t += 3){ A.fromBufferAttribute(P, t); B.fromBufferAttribute(P, t + 1); C.fromBufferAttribute(P, t + 2);
+            const f = C.sub(B).cross(A.sub(B)).normalize(); if (Math.abs(f.z) > .9995) for (let k = 0; k < 3; k++) N.setXYZ(t + k, 0, 0, Math.sign(f.z)); } }
+        const p = geo.attributes.position, n = p.count, a = new Float32Array(n * 4);
         for (let i = 0; i < n; i++){ const c = colourAt(p.getX(i) - x, p.getY(i) - y); a[i * 4] = c.r; a[i * 4 + 1] = c.g; a[i * 4 + 2] = c.b; a[i * 4 + 3] = 1; }
         geo.setAttribute('color', new THREE.BufferAttribute(a, 4)); geo.deleteAttribute('uv'); pieces.push(clayGeo(geo)); geo.dispose(); };
       // 1. the navy surround: one thick clay slab in the logo's outline
@@ -1080,7 +1088,13 @@ function buildFromGLTF(gltf){
         const geo = new THREE.ExtrudeGeometry(sh, { depth:dep, bevelEnabled:true, bevelThickness:small ? .06 : .14, bevelSize:bev, bevelOffset:-bev, bevelSegments:3, curveSegments:2 });
         // colour from the artwork, read a little way in from the edge so the navy outline never bleeds in
         addPiece(geo, sample, CX, CY, Z + .02 + SD + (Math.sin(count * 12.9898) * .5 + .5) * .05); count++; }
-      const logoMesh = new THREE.Mesh(mergeGeometries(pieces, false), clayMat); pieces.forEach(g => g.dispose()); logoMesh.castShadow = logoMesh.receiveShadow = true; scene.add(logoMesh);
+      // the sign is small next to the park's buildings, so its clay texture is finer (otherwise the fingerprints smear along the thin letter sides)
+      const signMat = clayMat.clone(); signMat.onBeforeCompile = sh => { clayCompile(sh); sh.uniforms.uClayTiling = { value:CLAY.tiling * SIGN_CLAY_FINER }; sh.uniforms.uNormStrength = { value:CLAY.normalStrength * .8 };
+        // the thin letter sides get smooth clay: the fingerprint texture only shows on the faces, where it can't smear
+        const nos = 'vec3 clayNOS = normalize(ctX.zyx * clayW.x + ctY.xzy * clayW.y + ctZ.xyz * clayW.z);';
+        sh.fragmentShader = sh.fragmentShader.replace(nos, nos + ` float signSide = 1.0 - smoothstep(.35, .85, abs(clayGeoN.z)); clayGrey = mix(clayGrey, uDiffMid, signSide * .85); clayNOS = normalize(mix(clayNOS, clayGeoN, signSide * .9));`); };
+      signMat.customProgramCacheKey = () => 'clay-sign';
+      const logoMesh = new THREE.Mesh(mergeGeometries(pieces, false), signMat); pieces.forEach(g => g.dispose()); logoMesh.castShadow = logoMesh.receiveShadow = true; scene.add(logoMesh);
     };
   }
   const numeric = (a, b) => a.name.localeCompare(b.name, undefined, { numeric:true });
