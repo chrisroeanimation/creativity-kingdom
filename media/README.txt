@@ -26,7 +26,8 @@ PICTURES AND VIDEOS, IN ORDER
 
 VIDEO STILLS (optional)
   poster.jpg          the still shown on the first video before it plays
-  03-poster.jpg       the still for 03.mp4; video2-poster.jpg for video2.mp4, and so on
+  poster2.jpg         the still for video2.mp4 (poster3.jpg for video3.mp4, and so on)
+  03-poster.jpg       the still for 03.mp4
 
 TITLES AND CAPTIONS (optional): captions.txt, one per line
   video: Chaos Castle pilot
@@ -45,3 +46,11 @@ SIZES THAT KEEP THE SITE QUICK
             GitHub refuses any single file over 100 MB. HandBrake's "Fast 1080p30"
             preset with "Web Optimized" ticked does this. (.mov files won't play in
             every browser: convert them to .mp4.)
+
+EXTRA SECTIONS (Clay Jam)
+  The Clay Jam panel has two extra parts after the press quotes, each with its own folder:
+    clayjam/playdoh     Play-Doh Jam for Hasbro
+    clayjam/other-ip    Famous characters, made in clay (SpongeBob, Angry Birds)
+  Name the pictures/videos in each folder the same way as above (01.jpg, 02.jpg, video.mp4 ...).
+  A description.txt or captions.txt in that folder works the same way too. One picture on its own
+  is shown wide; two or more sit side by side as tiles. Click any picture to see it large.

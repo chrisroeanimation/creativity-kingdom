@@ -146,6 +146,14 @@ a{color:var(--navy)}
 #viewer .vcount{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);color:#f3eedf;font-family:var(--display);font-size:16px;letter-spacing:.06em}
 #pMedia .gallery img{cursor:zoom-in}
 @media (hover:none){#viewer .varrow{display:none}}
+.extra{margin-top:10px;padding-top:18px;border-top:3px dashed #e2d6bf;display:flex;flex-direction:column;gap:12px}
+.extra h3{margin:0;font-family:var(--display);font-weight:400;font-size:26px;line-height:1.1;color:var(--navy)}
+.extra p{margin:0}
+.extra .secmedia{display:flex;flex-direction:column;gap:14px}
+.extra .secmedia:empty{display:none}
+#pBody .gallery img{cursor:zoom-in;aspect-ratio:4/3;object-fit:cover}
+.gallery.one{grid-template-columns:1fr}
+#pMedia .gallery.one img,#pBody .gallery.one img{aspect-ratio:16/9}
 .card .credits{display:flex;flex-direction:column;border-top:2px solid #e2d6bf}
 .card .credits div{display:grid;grid-template-columns:minmax(0,150px) minmax(0,1fr);gap:14px;padding:11px 0;border-bottom:2px solid #e2d6bf;font-size:15px;line-height:1.45}
 .card .credits dt,.card .credits b{font-weight:700;color:var(--navy)}
@@ -351,6 +359,12 @@ const PROJECTS = [
             ['“An incredible artistic and technical achievement.”','Modojo'],
             ['“Every lovingly-molded inch of Clay Jam is an uncanny delight.”','Kotaku'],
             ['“Clay Jam is a blast to play for kids and kids at heart.”','USA Today']],
+    sections:[
+      { title:'Play-Doh Jam for Hasbro', media:'playdoh', body:[
+        'In 2015 Hasbro asked us to bring Clay Jam into the world of Play-Doh. I directed a small team to create Play-Doh Jam, a new version of the game for the App Store and Google Play, with characters, props and landscapes sculpted by hand from real Play-Doh and photographed into the game.',
+        'The job was to make it unmistakably Play-Doh while keeping the handmade charm that made Clay Jam special: the brand’s bright signature colours, its soft, squashy shapes and its spirit of play in every creature and hillside, so the game sat naturally within one of the world’s best-known toy brands.'] },
+      { title:'Famous characters, made in clay', media:'other-ip', body:[
+        'Clay Jam’s look also caught the eye of other big names, and we were approached to make claymation games for SpongeBob SquarePants and Angry Birds. For each, I created clay visuals that turned much-loved characters into something hand-made and fun while staying true to every nuance fans know by heart: their proportions, expressions, colours and the small details that make them who they are.'] } ],
     images:[], video:'', watch:'', links:[['YumYumYukYuk',YUMYUM]] },
   { id:'chaos', title:'Chaos Castle', ride:'Chaos Castle', theme:'Designing worlds', role:'Creator & Creative Director', org:'Super Strange Studios',
     tags:['Original IP','Animated series & game','Uncommissioned development'],
@@ -498,33 +512,40 @@ function discoverMedia(id){
   })();
 }
 let shownProject = null;
-function renderMedia(p){
-  const m = p.media || { items:[], images:[] };
-  p.mediaShown = !!p.media;
-  let media = "", gallery = [];
-  const flush = () => { if (!gallery.length) return; media += `<div class="gallery">${gallery.join('')}</div>`; gallery = []; };
+// pictures and videos (as found by discoverMedia) → markup: videos full width, pictures as equal tiles
+function mediaHTML(m, alt){
+  let media = '', gallery = [];
+  const flush = () => { if (!gallery.length) return; media += `<div class="gallery${gallery.length === 1 ? ' one' : ''}">${gallery.join('')}</div>`; gallery = []; };
   for (const it of m.items){
     if (it.video){ flush();
       media += `<figure class="vid">${it.title ? `<figcaption class="vtitle">${esc(it.title)}</figcaption>` : ''}<video controls playsinline preload="metadata" src="${esc(it.src)}"${it.poster ? ` poster="${esc(it.poster)}"` : ''}></video></figure>`; }
     else { const c = it.title || '';
-      gallery.push(`<figure><img src="${esc(it.src)}" alt="${esc(c || p.title + ' picture')}" loading="lazy">${c ? `<figcaption>${esc(c)}</figcaption>` : ''}</figure>`); }
+      gallery.push(`<figure><img src="${esc(it.src)}" alt="${esc(c || alt)}" loading="lazy">${c ? `<figcaption>${esc(c)}</figcaption>` : ''}</figure>`); }
   }
-  flush();
-  if (p.portrait && !m.images.length) media += `<div class="gallery" style="grid-template-columns:minmax(0,180px);justify-content:center"><img src="img/portrait.jpg" alt="Chris Roe"></div>`;
-  $('#pMedia').innerHTML = media; $('#pMedia').hidden = !media;
-  const pics = [...$('#pMedia').querySelectorAll('.gallery img')];
+  flush(); return media;
+}
+// make pictures open the big viewer, and let videos pause the park music (one video at a time)
+function wireMedia(box){
+  const pics = [...box.querySelectorAll('.gallery img')];
   pics.forEach((img, i) => { img.tabIndex = 0; img.setAttribute('role', 'button');
     const open = () => openViewer(pics.map(x => ({ src:x.currentSrc || x.src, alt:x.alt, cap:x.parentElement.querySelector('figcaption')?.textContent || '' })), i);
     img.onclick = open; img.onkeydown = e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); open(); } }; });
-  // the park music steps aside while a video plays; only one video plays at a time
-  const vids = [...$('#pMedia').querySelectorAll('video')];
-  vids.forEach(v => { v.addEventListener('play', () => { pauseMusic(); vids.forEach(o => o !== v && o.pause()); });
-    const back = () => { if (vids.some(o => !o.paused)) return; if (musicOn && $('#intro').hidden) playMusic(); }; v.addEventListener('pause', back);
+  const vids = [...box.querySelectorAll('video')], all = () => [...$('#panel').querySelectorAll('video')];
+  vids.forEach(v => { v.addEventListener('play', () => { pauseMusic(); all().forEach(o => o !== v && o.pause()); });
+    const back = () => { if (all().some(o => !o.paused)) return; if (musicOn && $('#intro').hidden) playMusic(); }; v.addEventListener('pause', back);
     // when a video finishes while full screen, shrink it back into the panel
     v.addEventListener('ended', () => { const fs = document.fullscreenElement || document.webkitFullscreenElement;
       if (fs) (document.exitFullscreen || document.webkitExitFullscreen).call(document).catch?.(() => {});
       else if (v.webkitDisplayingFullscreen && v.webkitExitFullscreen) v.webkitExitFullscreen();   // iPhone's own full-screen player
       back(); }); });
+}
+function renderMedia(p){
+  const m = p.media || { items:[], images:[] };
+  p.mediaShown = !!p.media;
+  let media = mediaHTML(m, p.title + ' picture');
+  if (p.portrait && !m.images.length) media += `<div class="gallery" style="grid-template-columns:minmax(0,180px);justify-content:center"><img src="img/portrait.jpg" alt="Chris Roe"></div>`;
+  $('#pMedia').innerHTML = media; $('#pMedia').hidden = !media;
+  wireMedia($('#pMedia'));
   if (m.body && !p.bodyFromMedia){ $('#pBody').querySelectorAll('p.desc').forEach(e => e.remove()); $('#pBody').insertAdjacentHTML('afterbegin', m.body.map(t => `<p class="desc">${esc(t)}</p>`).join('')); }
 }
 function openProject(id){
@@ -540,10 +561,16 @@ function openProject(id){
   let body = p.body.map(t=>`<p class="desc">${esc(t)}</p>`).join('');
   const quotes = p.quotes || (p.quote ? [p.quote] : []);
   if (quotes.length) body += `<div class="quotes">${quotes.map(([q, who]) => `<blockquote><p>${esc(q)}</p><cite>${esc(who)}</cite></blockquote>`).join('')}</div>`;
+  // extra sections after the quotes, each with its own pictures from media/<project>/<folder>/ (and optional description.txt there)
+  if (p.sections) body += p.sections.map((sec, k) => `<section class="extra" data-k="${k}"><h3>${esc(sec.title)}</h3>${sec.body.map(t => `<p class="sdesc">${esc(t)}</p>`).join('')}<div class="secmedia"></div></section>`).join('');
   if (p.cv) body += `<h3 style="margin:6px 0 0;font-family:var(--display);font-weight:400;font-size:24px;color:var(--navy)">CV</h3><ol class="timeline">${p.cv.map(([d,a,b])=>`<li><time>${esc(d)}</time><div><b>${esc(a)}</b><span>${esc(b)}</span></div></li>`).join('')}</ol>`;
   if (p.credits) body += `<div class="credits">${p.credits.map(([a,b])=>`<div><b>${esc(a)}</b><span>${esc(b)}</span></div>`).join('')}</div>`;
   $('#pBody').innerHTML = body;
   renderMedia(p);
+  (p.sections || []).forEach((sec, k) => { if (!sec.media) return;
+    discoverMedia(`${id}/${sec.media}`).then(m => { if (shownProject !== id) return; const el = $('#pBody').querySelector(`section.extra[data-k="${k}"]`); if (!el) return;
+      const box = el.querySelector('.secmedia'); box.innerHTML = mediaHTML(m, sec.title + ' picture'); wireMedia(box);
+      if (m.body){ el.querySelectorAll('p.sdesc').forEach(e => e.remove()); el.querySelector('h3').insertAdjacentHTML('afterend', m.body.map(t => `<p class="sdesc">${esc(t)}</p>`).join('')); } }); });
   let acts = '';
   if (p.watch) acts += `<a class="plate warm" href="${esc(p.watch)}" target="_blank" rel="noopener">Watch on YouTube</a>`;
   for (const [l,u] of p.links) acts += `<a class="plate" href="${esc(u)}" target="_blank" rel="noopener">${esc(l)}</a>`;
