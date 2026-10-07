@@ -171,6 +171,7 @@ a{color:var(--navy)}
 .intro .eyebrow{color:var(--muted);font-size:clamp(14px,2.4vw,19px);letter-spacing:.07em;margin-top:2px}
 .intro h1{margin:0;display:flex;flex-direction:column;align-items:center;font-family:var(--display);font-weight:400;text-transform:uppercase;line-height:.86}
 .intro h1 .kicker{font-size:clamp(28px,6vw,52px);color:var(--cobalt);letter-spacing:.03em;margin-bottom:.12em}
+.intro h1 .biglogo{display:block;width:min(560px,84vw);height:auto;max-height:28vh;object-fit:contain;margin-top:.05em}
 .intro h1 .big{font-size:clamp(44px,min(10.5vw,11vh),88px);color:var(--lavender);-webkit-text-stroke:6px var(--navy-deep);paint-order:stroke fill;filter:drop-shadow(0 8px 0 var(--navy-deep));letter-spacing:.02em;text-wrap:balance}
 .intro .actions{flex-direction:column;align-items:center;gap:14px;margin-top:6px}
 .intro .cta{font-size:clamp(24px,4.6vw,34px);min-height:clamp(64px,10vw,80px);padding:0 clamp(26px,5vw,44px);border-width:4px;border-radius:22px;box-shadow:0 8px 0 var(--navy-deep);gap:14px}
@@ -277,7 +278,7 @@ a{color:var(--navy)}
   <div class="card" role="dialog" aria-modal="true" aria-labelledby="introTitle">
     <div class="themes" aria-label="What I do"><span>Designing worlds</span><span>Building worlds</span><span>Leading teams</span></div>
     <span class="eyebrow">Creative, Art &amp; Animation Director</span>
-    <h1 id="introTitle"><span class="kicker">Chris Roe's</span><span class="big">Creativity Kingdom</span></h1>
+    <h1 id="introTitle"><span class="kicker">Chris Roe's</span><img class="biglogo" src="img/kingdom-logo.webp" alt="Creativity Kingdom" width="1200" height="572"></h1>
     <div class="actions">
       <button class="plate warm cta" id="enterBtn" disabled><span id="enterLabel">Sculpting the park…</span><svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button>
       <button class="plate light" id="skipBtn">See all work</button>
