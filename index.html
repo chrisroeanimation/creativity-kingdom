@@ -1207,6 +1207,10 @@ function buildFromGLTF(gltf){
     addSnow(gp, top);
   }
 
+  // ── Clay Jam slide: Clay Jam's own characters as cut-out billboards (photos of the real clay models) ──
+  const slideRide = first('Ride_ClayJamSlide');
+  if (slideRide) addClayJamSprites(slideRide);
+
   // the mine-shaft drop tower behind Strike: the cage winds up slowly, waits at the top, drops, brakes and rests
   const dropCar = first('DropCar');
   if (dropCar){ scene.attach(dropCar); const y0 = dropCar.position.y, RISE = 15.2;
@@ -1303,6 +1307,73 @@ function makeFairyLights(mesh){
 }
 updaters.push((dt, t) => { fairyUniforms.uTime.value = t; fairyUniforms.uScale.value = renderer.domElement.height * .5; });
 
+
+/* ───────────── CLAY JAM SPRITES ─────────────
+   Photographs of Clay Jam's clay characters, cut out and stood around the slide as billboards that turn to face the
+   camera (and lean back a little with it) so they read like little models from wherever you look.
+   Positions are in the slide's own frame: x across the slide (negative = the far side), z down the slide
+   (8.5 = top of the run, 37 = bottom), h = height in metres. on:true stands it on the slide's surface. */
+const SLIDE_SPRITES = [
+  { img:'jvp',      x:-1,    z:3,    h:8.5, y:16.5, bob:.35 },    // floating above the top platform
+  { img:'billy',    x:-9.8,  z:15,   h:9,   y:3 },                        // Bung It In Billy, right behind the far side (feet hidden by the slide)
+  { img:'ishihara', x:-10,   z:28,   h:11.5 },                     // Ishihara, right behind the far side (feet hidden by the slide)
+  { img:'gobble',   x:-3,    z:13.5, h:3.2, on:true },
+  { img:'cyclops',  x:3.5,   z:17.5, h:3.3, on:true },
+  { img:'arch',     x:-1,    z:21.5, h:2.4, on:true },
+  { img:'upside',   x:-4.5,  z:25,   h:2.9, on:true },
+  { img:'tentacles',x:4,     z:27.5, h:2.8, on:true },
+  { img:'eyeball',  x:-3.5,  z:31,   h:2.0, on:true },
+  { img:'foot',     x:2.5,   z:34,   h:2.3, on:true },
+];
+const SPRITE_BRIGHT = .9;   // billboard brightness (1 = the photo exactly)
+const RASCALS = 16, RASCAL_H = 1.2;   // little rascals (hue-shifted), all the same small size, scattered over the slide
+const SLIDE_TILT = .55, SLIDE_TILT_ON = .2;   // how far a billboard leans back towards a high camera (0 = upright, 1 = fully facing it); less for those standing on the slope
+let slideInv = null;
+const sprites = [];
+const slideY = (z) => { const t = THREE.MathUtils.clamp((z - 8.5) / (37 - 8.5), 0, 1); return 0.4 + 10.4 * Math.pow(1 - t, 1.5) + 0.9 * Math.sin(t * 3 * Math.PI) * (1 - t); };
+function addClayJamSprites(ride){
+  ride.updateMatrixWorld(true); slideInv = ride.matrixWorld.clone().invert();
+  const list = SLIDE_SPRITES.slice();
+  // rascals: spread over the slide, kept clear of the bigger pieces and of each other
+  let seed = 7; const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const taken = list.filter(p => p.on).map(p => [p.x, p.z, 2.4]);
+  for (let i = 0, tries = 0; i < RASCALS && tries < 4000; tries++){
+    const x = -6 + r() * 12, z = 10.5 + r() * 26;
+    if (taken.some(([tx, tz, d]) => Math.hypot(tx - x, tz - z) < d)) continue;
+    taken.push([x, z, 1.7]); list.push({ img:'rascal' + String(i).padStart(2, '0'), x, z, h:RASCAL_H, on:true, hop:true }); i++;
+  }
+  for (const p of list){
+    const tex = texLoader.load(`img/sprites/${p.img}.webp`, t => {
+      const asp = t.image.width / t.image.height, g = new THREE.PlaneGeometry(p.h * asp, p.h); g.translate(0, p.h / 2, 0);
+      // shown as photographed: outside the park's filmic grade (which lifted and greyed them), a touch dimmer so they sit in the scene
+      const mat = new THREE.MeshBasicMaterial({ map:t, color:new THREE.Color(SPRITE_BRIGHT, SPRITE_BRIGHT, SPRITE_BRIGHT), toneMapped:false, alphaTest:.45, alphaToCoverage:true, side:THREE.DoubleSide });
+      const m = new THREE.Mesh(g, mat); m.castShadow = true; m.rotation.order = 'YXZ';
+      m.customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking:THREE.RGBADepthPacking, map:t, alphaTest:.5 });
+      const base = new THREE.Vector3(p.x, p.on ? slideY(p.z) - .05 : (p.y || 0), p.z).applyMatrix4(ride.matrixWorld);
+      m.position.copy(base); scene.add(m); sprites.push({ m, base, p, ph:Math.random() * 6.3, w:p.h * asp, lift:0 });
+    });
+    tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso;
+  }
+}
+const _sv = new THREE.Vector3(), _sr = new THREE.Vector3(), _su = new THREE.Vector3();
+function stepSprites(T){
+  for (const s of sprites){
+    const m = s.m, dx = camera.position.x - s.base.x, dz = camera.position.z - s.base.z, dh = Math.hypot(dx, dz);
+    const yaw = Math.atan2(dx, dz), lean = (s.p.on ? SLIDE_TILT_ON : SLIDE_TILT) * Math.atan2(camera.position.y - s.base.y, dh);
+    m.rotation.y = yaw; m.rotation.x = -lean;
+    if (s.p.on && slideInv){
+      // keep the whole lower part of the cut-out above the slide's surface (it slopes, and the cut-out turns and leans)
+      _sr.set(Math.cos(yaw), 0, -Math.sin(yaw)); _su.set(-Math.sin(lean) * Math.sin(yaw), Math.cos(lean), -Math.sin(lean) * Math.cos(yaw));
+      let need = 0;
+      for (const a of [-.5, -.25, 0, .25, .5]) for (const b of [0, .2, .4]){
+        _sv.copy(s.base).addScaledVector(_sr, a * s.w * .8).addScaledVector(_su, b * s.p.h);
+        const wy = _sv.y; _sv.applyMatrix4(slideInv); if (Math.abs(_sv.x) > 7.4) continue;
+        need = Math.max(need, slideY(_sv.z) + .04 - wy); }
+      s.lift += (need - s.lift) * .25;
+    }
+    m.position.y = s.base.y + s.lift + (s.p.bob ? Math.sin(T * 1.1 + s.ph) * s.p.bob : 0) + (s.p.hop && !reduceMotion ? Math.max(0, Math.sin(T * 2.2 + s.ph)) ** 6 * .25 : 0);
+  }
+}
 function addSnow(c, top = 16){
   const N = 500, pos = new Float32Array(N * 3);
   for (let i = 0; i < N; i++){ const a = rnd(6.3), r = Math.sqrt(rnd()) * 10; pos[i*3] = c.x + Math.cos(a) * r; pos[i*3+1] = rnd(0, top); pos[i*3+2] = c.z + Math.sin(a) * r; }
@@ -1572,6 +1643,7 @@ function frame(){
       f.o += (want - f.o) * (1 - Math.exp(-dt * 7)); f.fm.opacity = f.o; f.m.material = f.o > .98 ? clayMat : f.fm; f.m.castShadow = f.o > .5; }
   }
   setDaylight(T);
+  stepSprites(T);
   sun.position.copy(look).add(sunOffset); sun.target.position.copy(look);
   sky.position.copy(camera.position); skyUniforms.uTime.value = T;
   renderer.render(scene, camera);
