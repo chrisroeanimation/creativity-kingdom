@@ -695,6 +695,18 @@ async function startIntro(){
 }
 $('#musicBtn').onclick = () => { musicOn = !musicOn; try { localStorage.setItem('parkMusic', musicOn ? 'on' : 'off'); } catch (e) {} if (musicOn) playMusic(); else pauseMusic(); showMusic(); };
 document.addEventListener('visibilitychange', () => { if (document.hidden) pauseMusic(); else if (musicOn && $('#intro').hidden) playMusic(); });
+// Closing or leaving the page: silence the sound at once, before the browser starts tearing the 3D scene down.
+// (Fading out while the page is being destroyed makes the audio stutter, which is the 'glitch' noise.)
+let hushed = false;
+function hushNow(){ if (hushed) return; hushed = true; clearTimeout(mStopT);
+  try { if (mGain){ mGain.gain.cancelScheduledValues(0); mGain.gain.value = 0; mGain.disconnect(); } } catch (e) {}
+  try { if (actx) actx.suspend(); } catch (e) {}
+  try { music.pause(); document.querySelectorAll('video').forEach(v => v.pause()); } catch (e) {} }
+function unhush(){ if (!hushed) return; hushed = false; try { if (mGain && actx) mGain.connect(actx.destination); } catch (e) {} if (musicOn && $('#intro').hidden && !document.hidden) playMusic(); }
+addEventListener('pagehide', hushNow);
+addEventListener('pageshow', e => { if (e.persisted) unhush(); });   // came back via the browser's back button
+// beforeunload also fires for e.g. an email link that doesn't leave the page, so bring the music back if we're still here
+addEventListener('beforeunload', () => { hushNow(); setTimeout(unhush, 1200); });
 showMusic();
 
 /* ───────────── CLAY LOOK ─────────────
