@@ -732,17 +732,20 @@ sky.renderOrder = -10; sky.frustumCulled = false; scene.add(sky);
     fragmentShader:'varying float vA; void main(){ vec2 p = gl_PointCoord - 0.5; float d = length(p); float a = smoothstep(0.5, 0.0, d); gl_FragColor = vec4(vec3(1.0, 0.97, 0.9) * a * vA, a * vA); }' }));
   stars.frustumCulled = false; stars.renderOrder = -9; sky.add(stars); }
 const camera = new THREE.PerspectiveCamera(36, 1, 0.5, 500);
+function isTouchDevice(){ return matchMedia('(pointer: coarse)').matches; }
 
 const hemi = new THREE.HemisphereLight('#f4f1ea', '#4f7f4c', 1.05);
 const ambient = new THREE.AmbientLight('#ffd9b0', 0.35);   // a gentle warm fill so shadows aren't too dark
 scene.add(ambient);
 const sun = new THREE.DirectionalLight('#fff6ea', 2.6);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
-Object.assign(sun.shadow.camera, { left:-40, right:40, top:40, bottom:-40, near:1, far:160 });
-sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
+// shadows reach further (a wider shadow area), with a bigger shadow map on computers to keep them crisp
+const SHADOW_REACH = isTouchDevice() ? 58 : 70, SHADOW_MAP = isTouchDevice() ? 2048 : 4096;
+sun.shadow.mapSize.set(SHADOW_MAP, SHADOW_MAP);
+Object.assign(sun.shadow.camera, { left:-SHADOW_REACH, right:SHADOW_REACH, top:SHADOW_REACH, bottom:-SHADOW_REACH, near:1, far:200 });
+sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.05;
 const sunOffset = new THREE.Vector3(22, 42, 16);
-if (SUN_FROM) sunOffset.copy(SUN_FROM).normalize().multiplyScalar(60);
+if (SUN_FROM) sunOffset.copy(SUN_FROM).normalize().multiplyScalar(90);
 scene.add(hemi, sun, sun.target);
 
 /* ───────────── TIME OF DAY ─────────────
@@ -771,7 +774,7 @@ function setDaylight(T){
   ambient.color.copy(k0.amb).lerp(k1.amb, t); ambient.intensity = THREE.MathUtils.lerp(k0.ambI, k1.ambI, t);
   SKY_HORIZON.copy(k0.horizon).lerp(k1.horizon, t); SKY_TOP.copy(k0.top).lerp(k1.top, t);   // also the fog and background colour
   renderer.toneMappingExposure = THREE.MathUtils.lerp(k0.exp, k1.exp, t);
-  sunOffset.copy(k0.from).normalize().lerp(dayTmp.v.copy(k1.from).normalize(), t).normalize().multiplyScalar(60);
+  sunOffset.copy(k0.from).normalize().lerp(dayTmp.v.copy(k1.from).normalize(), t).normalize().multiplyScalar(90);
 }
 
 /* ───────────── CLAY MATERIAL ─────────────
