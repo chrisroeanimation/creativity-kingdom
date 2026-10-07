@@ -743,6 +743,8 @@ const sun = new THREE.DirectionalLight('#fff6ea', 2.6);
 sun.castShadow = true;
 // shadows reach further (a wider shadow area), with a bigger shadow map on computers to keep them crisp
 const SHADOW_REACH = isTouchDevice() ? 58 : 70, SHADOW_MAP = isTouchDevice() ? 2048 : 4096;
+const REEL_ARROW_AT = [-14.3, 53.94], REEL_ARROW_DIR = [-.78, .62], REEL_ARROW_COLOUR = '#2f6dff';   // the blue arrow at the start of the path to the Showreel Coaster: where (x, z) and which way
+const SKITTLES_AT = [0, 25.5];   // the skittles' triangle on the path to Chaos Castle (x, z)
 sun.shadow.mapSize.set(SHADOW_MAP, SHADOW_MAP);
 Object.assign(sun.shadow.camera, { left:-SHADOW_REACH, right:SHADOW_REACH, top:SHADOW_REACH, bottom:-SHADOW_REACH, near:1, far:200 });
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.05;
@@ -1096,6 +1098,29 @@ function buildFromGLTF(gltf){
       signMat.customProgramCacheKey = () => 'clay-sign';
       const logoMesh = new THREE.Mesh(mergeGeometries(pieces, false), signMat); pieces.forEach(g => g.dispose()); logoMesh.castShadow = logoMesh.receiveShadow = true; scene.add(logoMesh);
     };
+  }
+  { // Leading the way from the hub: no photo sign by the statue, a blue arrow on the path to the Showreel Coaster,
+    // and the skittles set up in a triangle on the path to Chaos Castle.
+    const pic = first('Picture_portrait'); if (pic && pic.parent) pic.parent.remove(pic);
+    // skittles: a 4-3-2-1 triangle, head pin facing the hub
+    const pinNodes = byRe(/^BowlingPin(_\d+)?$/);
+    if (pinNodes.length){ const [cx, cz] = SKITTLES_AT, sp = .95, slots = [];
+      for (let row = 0; row < 4; row++) for (let k = 0; k <= row; k++) slots.push([cx + (k - row / 2) * sp, cz + (1.5 - row) * sp * .87]);
+      pinNodes.forEach((o, i) => { if (!slots[i]) return; const c = new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3()), w = o.getWorldPosition(new THREE.Vector3());
+        w.x += slots[i][0] - c.x; w.z += slots[i][1] - c.z; o.parent.worldToLocal(w); o.position.copy(w); o.updateMatrixWorld(true); }); }
+    // a chunky, rounded blue clay arrow lying at the start of the path to the Showreel Coaster, pointing along it
+    { const [ax, az] = REEL_ARROW_AT, [dx, dz] = REEL_ARROW_DIR;
+      const Lh = 2, Ls = 2.3, Wh = 2, Ws = .8, pts = [[Lh, 0], [0, Wh], [0, Ws], [-Ls, Ws], [-Ls, -Ws], [0, -Ws], [0, -Wh]];   // tip, head and shaft corners
+      const R = [.55, .45, .25, .55, .55, .25, .45];   // how round each corner is
+      const sh = new THREE.Shape(), n = pts.length, V = (p, q, d) => { const vx = q[0] - p[0], vy = q[1] - p[1], L = Math.hypot(vx, vy); return [p[0] + vx / L * d, p[1] + vy / L * d]; };
+      for (let i = 0; i < n; i++){ const p = pts[i], prev = pts[(i + n - 1) % n], next = pts[(i + 1) % n];
+        const a0 = V(p, prev, R[i]), a1 = V(p, next, R[i]);
+        if (i === 0) sh.moveTo(...a0); else sh.lineTo(...a0);
+        sh.quadraticCurveTo(p[0], p[1], ...a1); }
+      sh.closePath();
+      const g = new THREE.ExtrudeGeometry(sh, { depth:.12, bevelEnabled:true, bevelThickness:.16, bevelSize:.2, bevelOffset:-.05, bevelSegments:6, curveSegments:10 });
+      g.rotateX(-Math.PI / 2); g.translate(0, .12, 0); g.rotateY(Math.atan2(-dz, dx)); g.translate(ax, 0, az);
+      const arrow = new THREE.Mesh(colourGeo(toCreasedNormals(g, 1.0), REEL_ARROW_COLOUR), clayMat); arrow.receiveShadow = true; arrow.castShadow = true; scene.add(arrow); }
   }
   const numeric = (a, b) => a.name.localeCompare(b.name, undefined, { numeric:true });
 
