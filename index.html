@@ -339,6 +339,7 @@ a{color:var(--navy)}
   <div class="vcount" id="vCount" aria-live="polite"></div>
 </div>
 
+<script defer src="lib/d3-array.min.js"></script><script defer src="lib/d3-contour.min.js"></script>
 <script type="importmap">{ "imports": { "three": "./three.module.min.js" } }</script>
 <script type="module">
 import * as THREE from 'three';
@@ -985,6 +986,103 @@ function buildFromGLTF(gltf){
   root.updateMatrixWorld(true);
   const byRe = re => { const out = []; root.traverse(o => { if (re.test(o.name)) out.push(o); }); return out; };
   const first = name => root.getObjectByName(name);
+  { // The gate sign: the park logo as individual 3D clay pieces on a navy surround, stuck to the original sign's strip (now dark blue), with warm white bulbs round the surround's sides.
+    // The pieces are traced from img/kingdom-sign.webp (the logo with CHRIS ROE'S added), so a new logo image there rebuilds the sign.
+    const sign = root.getObjectByName('Fade_CreativityKingdomSign');
+    let strip = null;
+    if (sign && sign.isMesh){
+      // keep only the old back panel, make it navy, and make it a thinner strip
+      const g = sign.geometry, col = g.attributes.color, pos = g.attributes.position, n = pos.count;
+      const isLetter = i => { const r = col.getX(i), gg = col.getY(i), b = col.getZ(i); return (r > .3 && gg > .3) || (r > .3 && b > .8); };
+      const idx = g.index ? Array.from(g.index.array) : Array.from({ length:n }, (_, i) => i), keep = [];
+      for (let t = 0; t < idx.length; t += 3) if (!isLetter(idx[t]) && !isLetter(idx[t + 1]) && !isLetter(idx[t + 2])) keep.push(idx[t], idx[t + 1], idx[t + 2]);
+      g.setIndex(keep);
+      let y0 = 1e9, y1 = -1e9; for (const i of keep){ y0 = Math.min(y0, pos.getY(i)); y1 = Math.max(y1, pos.getY(i)); }
+      const SQ = .7; for (let i = 0; i < n; i++){ pos.setY(i, y0 + (pos.getY(i) - y0) * SQ); if (col.getZ(i) > .5) col.setXYZ(i, .02, .028, .19); }
+      pos.needsUpdate = col.needsUpdate = true; g.computeBoundingBox(); g.computeBoundingSphere();
+      // the strip's fairy lights move down with it (each bulb is 8 vertices; squash about the strip's base, in world space)
+      sign.updateMatrixWorld(true); const wb0 = new THREE.Box3(), v = new THREE.Vector3(); for (const i of keep) wb0.expandByPoint(v.fromBufferAttribute(pos, i).applyMatrix4(sign.matrixWorld)); const base = wb0.min.y;
+      // the strip's top edge at any x (it steps up behind the logo), read from its front-face triangles
+      const W3 = i => new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(sign.matrixWorld), fe = [];
+      for (let t = 0; t < keep.length; t += 3){ const tri = [W3(keep[t]), W3(keep[t + 1]), W3(keep[t + 2])]; if (tri.every(q => q.z > wb0.max.z - .03)) for (let e = 0; e < 3; e++) fe.push(tri[e], tri[(e + 1) % 3]); }
+      const topAt = x => { let t = -1e9; for (let e = 0; e < fe.length; e += 2){ const a = fe[e], b = fe[e + 1]; if (Math.abs(a.x - b.x) < 1e-5 || x < Math.min(a.x, b.x) || x > Math.max(a.x, b.x)) continue; t = Math.max(t, a.y + (b.y - a.y) * (x - a.x) / (b.x - a.x)); } return t > -1e8 ? t : wb0.max.y; };
+      root.traverse(o => { if (!o.isMesh || !/^FairyLights/.test(o.name)) return; o.updateMatrixWorld(true);
+        const p = o.geometry.attributes.position, inv = o.matrixWorld.clone().invert();
+        for (let b = 0; b + 8 <= p.count; b += 8){ const c = new THREE.Vector3(); for (let k = 0; k < 8; k++) c.add(v.fromBufferAttribute(p, b + k).applyMatrix4(o.matrixWorld)); c.divideScalar(8);
+          if (Math.abs(c.x) > wb0.max.x + .4 || c.z < wb0.min.z - .4 || c.z > wb0.max.z + .6 || c.y < base - .3 || c.y > base + 5) continue;
+          const dy = (c.y > base + 2.6 ? topAt(c.x) - .16 : Math.min(topAt(c.x) - .16, Math.max(0, c.y - base) * SQ + base)) - Math.max(c.y, base);
+          for (let k = 0; k < 8; k++){ v.fromBufferAttribute(p, b + k).applyMatrix4(o.matrixWorld); v.y += dy; v.applyMatrix4(inv); p.setXYZ(b + k, v.x, v.y, v.z); } }
+        p.needsUpdate = true; });
+      strip = wb0;
+    }
+    const sb = strip || new THREE.Box3(new THREE.Vector3(-10.8, 8, 68.68), new THREE.Vector3(10.8, 10.8, 69.19));
+    const LW = 13.0, IW = 1740, IH = 829, LH = LW * IH / IW, s = LW / IW;
+    const CX = 0, CY = (sb.min.y + sb.max.y) / 2 + .75, Z = sb.max.z;
+    // warm white bulbs (placed round the logo once its outline is traced)
+    const BULB_GAP = .5;
+    const bulbG = new THREE.SphereGeometry(.15, 12, 8), bulbM = new THREE.MeshBasicMaterial({ color:new THREE.Color(1.3, 1.08, .78), toneMapped:false });
+    const glowM = new THREE.SpriteMaterial({ color:'#ffd9a0', transparent:true, opacity:.55, depthWrite:false, blending:THREE.AdditiveBlending, map:(() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })() });
+    const img = new Image(); img.src = 'img/kingdom-sign.webp';
+    img.onload = () => { if (!window.d3 || !d3.contours) return;
+      const cv = document.createElement('canvas'); cv.width = IW; cv.height = IH; const g = cv.getContext('2d', { willReadFrequently:true });
+      g.drawImage(img, 0, 0);
+      const px = g.getImageData(0, 0, IW, IH).data;
+      // contour grids at reduced resolution
+      const K = .6, GW = Math.round(IW * K), GH = Math.round(IH * K), sur = new Float64Array(GW * GH), let_ = new Float64Array(GW * GH);
+      for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++){
+        let a = 0, l = 0, c = 0; for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++){
+          const ix = Math.min(IW - 1, Math.floor((x + dx * .5) / K)), iy = Math.min(IH - 1, Math.floor((y + dy * .5) / K)), o = (iy * IW + ix) * 4;
+          const al = px[o + 3] / 255, mx = Math.max(px[o], px[o + 1], px[o + 2]); a += al; l += al * Math.min(1, Math.max(0, (mx - 50) / 100)); c++; }
+        sur[y * GW + x] = a / c; let_[y * GW + x] = l / c; }
+      const pad = (arr) => { const w = GW + 2, h = GH + 2, o = new Float64Array(w * h); for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) o[(y + 1) * w + x + 1] = arr[y * GW + x]; return o; };
+      const contour = arr => d3.contours().size([GW + 2, GH + 2]).smooth(true).thresholds([.5])(pad(arr))[0].coordinates;
+      // grid -> world (relative to the logo centre)
+      const toW = ([gx, gy]) => new THREE.Vector2(((gx - 1) / K - IW / 2) * s, -((gy - 1) / K - IH / 2) * s);
+      const ring = (r, tol = .03) => { const out = []; let last = null; for (const p of r){ const v = toW(p); if (!last || v.distanceTo(last) > tol){ out.push(v); last = v; } } if (out.length > 2 && out[0].distanceTo(out[out.length - 1]) < .02) out.pop(); return out; };
+      const shapeOf = (poly, tol) => { const sh = new THREE.Shape(ring(poly[0], tol)); for (const h of poly.slice(1)){ const hr = ring(h, tol); if (hr.length > 2) sh.holes.push(new THREE.Path(hr)); } return sh; };
+      const area = r => { let a = 0; for (let i = 0, j = r.length - 1; i < r.length; j = i++) a += (r[j][0] + r[i][0]) * (r[j][1] - r[i][1]); return Math.abs(a / 2); };
+      // the letters' fill colours, grown out over the navy outline (half resolution), so a letter's edges only ever pick up its own colour
+      const FW = IW >> 1, FH = IH >> 1, fc = new Float32Array(FW * FH * 3), fk = new Uint8Array(FW * FH);
+      for (let y = 0; y < FH; y++) for (let x = 0; x < FW; x++){ const o = ((y * 2) * IW + x * 2) * 4, mx = Math.max(px[o], px[o + 1], px[o + 2]);
+        if (px[o + 3] > 240 && mx > 140){ const f = y * FW + x; fk[f] = 1; fc[f * 3] = px[o]; fc[f * 3 + 1] = px[o + 1]; fc[f * 3 + 2] = px[o + 2]; } }
+      for (let it = 0; it < 24; it++){ const add = [];
+        for (let y = 1; y < FH - 1; y++) for (let x = 1; x < FW - 1; x++){ const f = y * FW + x; if (fk[f]) continue; let r = 0, g2 = 0, b = 0, k = 0;
+          for (const q of [f - 1, f + 1, f - FW, f + FW]) if (fk[q]){ r += fc[q * 3]; g2 += fc[q * 3 + 1]; b += fc[q * 3 + 2]; k++; }
+          if (k) add.push(f, r / k, g2 / k, b / k); }
+        for (let i = 0; i < add.length; i += 4){ const f = add[i]; fk[f] = 1; fc[f * 3] = add[i + 1]; fc[f * 3 + 1] = add[i + 2]; fc[f * 3 + 2] = add[i + 3]; } }
+      const sample = (wx, wy) => { const ix = Math.max(0, Math.min(FW - 1, Math.round((wx / s + IW / 2) / 2))), iy = Math.max(0, Math.min(FH - 1, Math.round((-wy / s + IH / 2) / 2))), f = iy * FW + ix;
+        const c = new THREE.Color().setRGB(fc[f * 3] / 255, fc[f * 3 + 1] / 255, fc[f * 3 + 2] / 255, THREE.SRGBColorSpace), h = {}; c.getHSL(h); return c.setHSL(h.h, Math.min(1, h.s * 1.25), h.l * .94); };
+      const pieces = [];
+      const addPiece = (geo, colourAt, x, y, z) => { geo.translate(x, y, z); const p = geo.attributes.position, n = p.count, a = new Float32Array(n * 4);
+        for (let i = 0; i < n; i++){ const c = colourAt(p.getX(i) - x, p.getY(i) - y); a[i * 4] = c.r; a[i * 4 + 1] = c.g; a[i * 4 + 2] = c.b; a[i * 4 + 3] = 1; }
+        geo.setAttribute('color', new THREE.BufferAttribute(a, 4)); geo.deleteAttribute('uv'); pieces.push(clayGeo(geo)); geo.dispose(); };
+      // 1. the navy surround: one thick clay slab in the logo's outline
+      const SD = .45, navy = new THREE.Color('#141a52');
+      for (const poly of contour(sur)){ if (area(poly[0]) < 40) continue;
+        const geo = new THREE.ExtrudeGeometry(shapeOf(poly, .06), { depth:SD, bevelEnabled:true, bevelThickness:.12, bevelSize:.1, bevelOffset:-.1, bevelSegments:2, curveSegments:2 });
+        addPiece(geo, () => navy, CX, CY, Z + .02);
+        // warm white bulbs stuck round the surround's outer side faces
+        const r = poly[0].map(toW), n = r.length; if (n < 20) continue;
+        const sm = r.map((_, i) => { const v = new THREE.Vector2(); for (let k = -6; k <= 6; k++) v.add(r[(i + k + n) % n]); return v.divideScalar(13); });
+        let sa = 0; for (let i = 0; i < n; i++){ const a = sm[i], b = sm[(i + 1) % n]; sa += a.x * b.y - b.x * a.y; }
+        const out = sa > 0 ? 1 : -1, zb = Z + .02 + SD / 2; let acc = 0;
+        for (let i = 0; i < n; i++){ const a = sm[i], b = sm[(i + 1) % n], L = a.distanceTo(b); acc += L; if (acc < BULB_GAP) continue; acc = 0;
+          const t = new THREE.Vector2(b.x - a.x, b.y - a.y).normalize(), nx = t.y * out, ny = -t.x * out;
+          const bx = CX + a.x + nx * .1, by = CY + a.y + ny * .1;
+          const bm = new THREE.Mesh(bulbG, bulbM); bm.position.set(bx, by, zb); scene.add(bm);
+          const gl = new THREE.Sprite(glowM); gl.position.set(bx + nx * .05, by + ny * .05, zb + .1); gl.scale.setScalar(.85); scene.add(gl); } }
+      // 2. every letter (and the crown, and each letter of CHRIS ROE'S) as its own puffy clay piece
+      let count = 0;
+      for (const poly of contour(let_)){ if (area(poly[0]) < 12) continue;
+        const small0 = area(poly[0]) < 900, sh = shapeOf(poly, small0 ? .016 : .03); if (sh.getPoints().length < 3) continue;
+        const pts = sh.getPoints(), c = pts.reduce((a, p) => a.add(p), new THREE.Vector2()).divideScalar(pts.length);
+        const small = small0, dep = small ? .14 : .26, bev = small ? .04 : .09;
+        const geo = new THREE.ExtrudeGeometry(sh, { depth:dep, bevelEnabled:true, bevelThickness:small ? .06 : .14, bevelSize:bev, bevelOffset:-bev, bevelSegments:3, curveSegments:2 });
+        // colour from the artwork, read a little way in from the edge so the navy outline never bleeds in
+        addPiece(geo, sample, CX, CY, Z + .02 + SD + (Math.sin(count * 12.9898) * .5 + .5) * .05); count++; }
+      const logoMesh = new THREE.Mesh(mergeGeometries(pieces, false), clayMat); pieces.forEach(g => g.dispose()); logoMesh.castShadow = logoMesh.receiveShadow = true; scene.add(logoMesh);
+    };
+  }
   const numeric = (a, b) => a.name.localeCompare(b.name, undefined, { numeric:true });
 
   // Unity's sun: take its direction and colour.
@@ -1676,5 +1774,4 @@ function frame(){
   b.classList.add('quiet'); b.focus({ focusVisible:false }); addEventListener('keydown', e => { if (e.key === 'Tab') b.classList.remove('quiet'); }, { once:true });
 })();
 </script>
-
 </html>
