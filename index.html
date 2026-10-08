@@ -765,7 +765,9 @@ sun.castShadow = true;
 // shadows reach further (a wider shadow area), with a bigger shadow map on computers to keep them crisp
 const SHADOW_REACH = isTouchDevice() ? 58 : 70, SHADOW_MAP = isTouchDevice() ? 2048 : 4096;
 const REEL_ARROW_AT = [-14.3, 53.94], REEL_ARROW_DIR = [-.78, .62], REEL_ARROW_COLOUR = '#2f6dff';   // the blue arrow at the start of the path to the Showreel Coaster: where (x, z) and which way
-const SKITTLES_AT = [0, 25.5];   // the skittles' triangle on the path to Chaos Castle (x, z)
+const SKITTLES_AT = [0, 25.5];
+const GATE_ARROW_SIZE = .36;
+const SNOWMAN_TURN = .25;   // the Sky Kids snowman turns a little towards the path (radians)   // the little arrows over the ride gates, as a fraction of the path arrow   // the skittles' triangle on the path to Chaos Castle (x, z)
 sun.shadow.mapSize.set(SHADOW_MAP, SHADOW_MAP);
 Object.assign(sun.shadow.camera, { left:-SHADOW_REACH, right:SHADOW_REACH, top:SHADOW_REACH, bottom:-SHADOW_REACH, near:1, far:200 });
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.05;
@@ -780,7 +782,7 @@ scene.add(hemi, sun, sun.target);
 const DAY_CYCLE = 120;
 const C = h => new THREE.Color(h);
 const DAY_KEYS = [
-  { name:'midday',     from:new THREE.Vector3(0.62, 0.72, 0.30), sun:null /* the park's own sun */, sunK:1.00, sky:C('#f4f1ea'), ground:C('#4f7f4c'), hemiI:1.05, amb:C('#ffd9b0'), ambI:0.35, horizon:C('#a6dcff'), top:C('#06148f'), exp:1.05 },
+  { name:'midday',     from:new THREE.Vector3(0.62, 0.72, 0.30), sun:null /* the park's own sun */, sunK:0.85, sky:C('#f4f1ea'), ground:C('#4f7f4c'), hemiI:1.05, amb:C('#ffd9b0'), ambI:0.35, horizon:C('#a6dcff'), top:C('#06148f'), exp:1.05 },
   { name:'golden hour', from:new THREE.Vector3(0.82, 0.38, 0.14), sun:C('#ffbb5c'),                    sunK:1.02, sky:C('#fff0d6'), ground:C('#6a8a44'), hemiI:1.06, amb:C('#ffc184'), ambI:0.5, horizon:C('#ffcf96'), top:C('#3a46a6'), exp:1.2 },
 ];
 const middaySun = { color:new THREE.Color('#fff6ea'), i:2.6 };
@@ -876,6 +878,17 @@ const isClayMat = m => !!m && /^ClayMaster/.test(m.name || '');
 const GET = ['getX','getY','getZ','getW'];
 function floatAttr(a){ const n = a.count, s = a.itemSize, out = new Float32Array(n * s); for (let k = 0; k < s; k++){ const g = GET[k]; for (let i = 0; i < n; i++) out[i * s + k] = a[g](i); } return new THREE.BufferAttribute(out, s); }
 // A clay geometry with position/normal/colour(rgba) in float, indexed, optionally baked by a matrix.
+// The chunky, rounded clay arrow (pointing along +x, scaled by k): the guide arrow on the path, and the little arrows over the ride gates
+function roundArrowShape(k = 1){
+  const Lh = 2 * k, Ls = 2.3 * k, Wh = 2 * k, Ws = .8 * k, pts = [[Lh, 0], [0, Wh], [0, Ws], [-Ls, Ws], [-Ls, -Ws], [0, -Ws], [0, -Wh]];   // tip, head and shaft corners
+  const R = [.55, .45, .25, .55, .55, .25, .45].map(r => r * k);   // how round each corner is
+  const sh = new THREE.Shape(), n = pts.length, V = (p, q, d) => { const vx = q[0] - p[0], vy = q[1] - p[1], L = Math.hypot(vx, vy); return [p[0] + vx / L * d, p[1] + vy / L * d]; };
+  for (let i = 0; i < n; i++){ const p = pts[i], prev = pts[(i + n - 1) % n], next = pts[(i + 1) % n];
+    const a0 = V(p, prev, R[i]), a1 = V(p, next, R[i]);
+    if (i === 0) sh.moveTo(...a0); else sh.lineTo(...a0);
+    sh.quadraticCurveTo(p[0], p[1], ...a1); }
+  sh.closePath(); return sh;
+}
 function clayGeo(src, matrix){
   const g = new THREE.BufferGeometry();
   const n = src.attributes.position.count;
@@ -1131,17 +1144,62 @@ function buildFromGLTF(gltf){
         w.x += slots[i][0] - c.x; w.z += slots[i][1] - c.z; o.parent.worldToLocal(w); o.position.copy(w); o.updateMatrixWorld(true); }); }
     // a chunky, rounded blue clay arrow lying at the start of the path to the Showreel Coaster, pointing along it
     { const [ax, az] = REEL_ARROW_AT, [dx, dz] = REEL_ARROW_DIR;
-      const Lh = 2, Ls = 2.3, Wh = 2, Ws = .8, pts = [[Lh, 0], [0, Wh], [0, Ws], [-Ls, Ws], [-Ls, -Ws], [0, -Ws], [0, -Wh]];   // tip, head and shaft corners
-      const R = [.55, .45, .25, .55, .55, .25, .45];   // how round each corner is
-      const sh = new THREE.Shape(), n = pts.length, V = (p, q, d) => { const vx = q[0] - p[0], vy = q[1] - p[1], L = Math.hypot(vx, vy); return [p[0] + vx / L * d, p[1] + vy / L * d]; };
-      for (let i = 0; i < n; i++){ const p = pts[i], prev = pts[(i + n - 1) % n], next = pts[(i + 1) % n];
-        const a0 = V(p, prev, R[i]), a1 = V(p, next, R[i]);
-        if (i === 0) sh.moveTo(...a0); else sh.lineTo(...a0);
-        sh.quadraticCurveTo(p[0], p[1], ...a1); }
-      sh.closePath();
+      const sh = roundArrowShape(1);
       const g = new THREE.ExtrudeGeometry(sh, { depth:.12, bevelEnabled:true, bevelThickness:.16, bevelSize:.2, bevelOffset:-.05, bevelSegments:6, curveSegments:10 });
       g.rotateX(-Math.PI / 2); g.translate(0, .12, 0); g.rotateY(Math.atan2(-dz, dx)); g.translate(ax, 0, az);
       const arrow = new THREE.Mesh(colourGeo(toCreasedNormals(g, 1.0), REEL_ARROW_COLOUR), clayMat); arrow.receiveShadow = true; arrow.castShadow = true; scene.add(arrow); }
+  }
+  { // The snowman outside the Sky Kids grotto, remade to match the Sky Kids Christmas snowman: a squat clay body, big glossy eyes,
+    // a little carrot nose and smile, a red scarf with a hanging tail, twig arms and a green top hat with a yellow band.
+    const grotto = first('Grotto');
+    if (grotto && grotto.isMesh && grotto.geometry.attributes.color){
+      const g = grotto.geometry, pos = g.attributes.position, M = grotto.matrixWorld, v = new THREE.Vector3();
+      // find the old snowman by its black hat, then lift all of him out of the grotto model
+      const hat = new THREE.Box3(), col = g.attributes.color;
+      for (let i = 0; i < pos.count; i++){ if (col.getX(i) < .05 && col.getY(i) < .05 && col.getZ(i) < .05){ v.fromBufferAttribute(pos, i).applyMatrix4(M); if (v.y > 4) hat.expandByPoint(v); } }
+      if (!hat.isEmpty()){
+        const cx = (hat.min.x + hat.max.x) / 2, cz = (hat.min.z + hat.max.z) / 2, inMan = i => { v.fromBufferAttribute(pos, i).applyMatrix4(M); return v.y > .12 && Math.hypot(v.x - cx, v.z - cz) < 1.75 && !(col.getX(i) > .9 && col.getY(i) > .92 && col.getZ(i) > .95); };   // everything of his, but not the snowy ground
+        const idx = g.index ? Array.from(g.index.array) : Array.from({ length:pos.count }, (_, i) => i), keep = [];
+        for (let t = 0; t < idx.length; t += 3) if (!(inMan(idx[t]) && inMan(idx[t + 1]) && inMan(idx[t + 2]))) keep.push(idx[t], idx[t + 1], idx[t + 2]);
+        g.setIndex(keep);
+        const parts = [], add = (geo, hex, x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1, gloss = false) => {
+          geo.scale(sx, sy, sz); geo.rotateX(rx); geo.rotateY(ry); geo.rotateZ(rz); geo.translate(x, y, z); parts.push(colourGeo(geo, hex, gloss ? 0 : 1)); };
+        const SNOW = '#f2f0ea', HAT = '#5d8a3c', BAND = '#d9b44e', SCARF = '#bf4a3d', NOSE = '#cf5a3a', TWIG = '#6a4a3a', EYE = '#141019';
+        const base = .3, bodyR = 1.6, bodyY = base + bodyR * .8, headR = 1.08, headY = bodyY + bodyR * .8 + headR * .62;
+        add(new THREE.SphereGeometry(bodyR, 40, 28), SNOW, 0, bodyY, 0, 0, 0, 0, 1.04, .82, 1);                 // squat bottom
+        add(new THREE.SphereGeometry(headR, 36, 26), SNOW, 0, headY, .05, 0, 0, 0, 1, .96, 1);                  // head
+        // big glossy eyes with a white glint, set wide on the face
+        const onHead = (a, y, out = 0) => { const r = Math.sqrt(Math.max(0, headR * headR - (y - headY) ** 2)) + out; return [Math.sin(a) * r, y, .05 + Math.cos(a) * r]; };
+        for (const sgn of [-1, 1]){ const [ex, ey, ez] = onHead(sgn * .5, headY + .12, -.05);
+          add(new THREE.SphereGeometry(.21, 18, 14), EYE, ex, ey, ez, 0, sgn * .5, 0, 1, 1.12, .55, true);
+          add(new THREE.SphereGeometry(.055, 10, 8), '#ffffff', ex + .07, ey + .09, ez + .1, 0, 0, 0, 1, 1, 1, true); }
+        { const [nx, ny, nz] = onHead(0, headY - .12, -.08); add(new THREE.ConeGeometry(.19, .62, 18), NOSE, nx, ny, nz + .3, Math.PI / 2, 0, 0, 1, 1, 1); }   // carrot nose
+        { const [mx, my, mz] = onHead(.24, headY - .36, -.01); add(new THREE.TorusGeometry(.2, .04, 8, 18, 1.7), '#2a1d1d', mx, my, mz, 0, .22, Math.PI + .9); }   // a little smile
+        // the scarf: a soft roll round the neck and a tail hanging down the front
+        add(new THREE.TorusGeometry(.98, .27, 16, 44), SCARF, 0, bodyY + bodyR * .7, .02, Math.PI / 2, 0, 0, 1, 1, .78);
+        { const ts = new THREE.Shape(), w = .3, h = .85, r = .14; ts.moveTo(-w + r, -h); ts.lineTo(w - r, -h); ts.quadraticCurveTo(w, -h, w, -h + r); ts.lineTo(w, h - r); ts.quadraticCurveTo(w, h, w - r, h); ts.lineTo(-w + r, h); ts.quadraticCurveTo(-w, h, -w, h - r); ts.lineTo(-w, -h + r); ts.quadraticCurveTo(-w, -h, -w + r, -h);
+          const tg = new THREE.ExtrudeGeometry(ts, { depth:.08, bevelEnabled:true, bevelThickness:.08, bevelSize:.08, bevelSegments:4, curveSegments:6 });
+          add(toCreasedNormals(tg, 1.0), SCARF, .38, bodyY + .45, bodyR * .95 + .05, -.32, .12, -.06); }
+        // the hat: a wide, slightly wavy brim, a tall crown and a yellow band, set at a jaunty angle
+        const hatY = headY + headR * .78, hatG = [];
+        const brim = new THREE.LatheGeometry([[0, 0], [1.25, -.02], [1.5, .06], [1.56, .14], [1.45, .2], [1.0, .2], [0, .22]].map(([x, y]) => new THREE.Vector2(x, y)), 48);
+        hatG.push([brim, HAT, 0]);
+        hatG.push([new THREE.CylinderGeometry(.78, .84, 1.35, 40), HAT, .85]);
+        hatG.push([new THREE.CylinderGeometry(.87, .87, .3, 40), BAND, .38]);
+        for (const [hg, hex, y] of hatG){ hg.translate(0, y, 0); hg.rotateZ(-.1); hg.rotateX(-.06); add(hg, hex, -.05, hatY, 0); }
+        // twig arms, each with a forked little hand
+        const twig = pts => { const c = new THREE.CatmullRomCurve3(pts.map(([x, y, z]) => new THREE.Vector3(x, y, z))); return new THREE.TubeGeometry(c, 16, .075, 8, false); };
+        for (const sgn of [-1, 1]){ const sy = bodyY + .55;
+          const hand = [sgn * 3.05, sy + .55, .15];
+          add(twig([[sgn * 1.1, sy, 0], [sgn * 1.9, sy + .18, .08], [sgn * 2.6, sy + .32, .12], hand]), TWIG, 0, 0, 0);
+          add(twig([hand, [hand[0] + sgn * .35, hand[1] + .35, hand[2]]]), TWIG, 0, 0, 0);
+          add(twig([hand, [hand[0] + sgn * .42, hand[1] - .08, hand[2] + .05]]), TWIG, 0, 0, 0);
+          add(twig([[sgn * 2.45, sy + .3, .12], [sgn * 2.6, sy - .05, .14]]), TWIG, 0, 0, 0); }
+        const man = new THREE.Mesh(mergeGeometries(parts, false), clayMat); parts.forEach(q => q.dispose());
+        man.position.set(cx, 0, cz); man.rotation.y = SNOWMAN_TURN; man.castShadow = man.receiveShadow = true; scene.add(man);
+        collide(cx, cz, 1.6);
+      }
+    }
   }
   const numeric = (a, b) => a.name.localeCompare(b.name, undefined, { numeric:true });
 
@@ -1266,6 +1324,8 @@ function buildFromGLTF(gltf){
     const b = new THREE.Box3(), mb = new THREE.Box3(), drop = [];
     p.traverse(o => { if (!o.isMesh) return; mb.setFromObject(o); if (mb.min.y > 1.5) drop.push(o); else b.union(mb); });
     drop.forEach(o => o.parent && o.parent.remove(o));
+    // size and centre come from the pad's own base when it has one (other things parked under a pad, like a wandering creature, mustn't stretch the gate ring)
+    let base = null; p.traverse(o => { if (!base && /^PadBase/.test(o.name)) base = o; }); if (base){ b.makeEmpty(); base.traverse(o => { if (o.isMesh) b.union(mb.setFromObject(o, true)); }); }   // precise: a turned pad's loose box would be too big
     if (b.isEmpty()) b.setFromCenterAndSize(p.getWorldPosition(new THREE.Vector3()), new THREE.Vector3(6, .3, 6));
     const c = b.getCenter(new THREE.Vector3());
     zones.push({ id, x:c.x, z:c.z, r:Math.max(1.5, (b.max.x - b.min.x) / 2), top:b.max.y, idx:i });
@@ -1342,8 +1402,10 @@ function buildFromGLTF(gltf){
 
   // ── pad markers ──
   const padMatOn = new THREE.MeshStandardMaterial({ color:'#f6c62e', emissive:'#f4a91f', emissiveIntensity:1, roughness:.6 });
-  const arrowGeo = new THREE.ConeGeometry(.7, 1.2, 4); arrowGeo.rotateX(Math.PI);
-  const arrows = new THREE.InstancedMesh(arrowGeo, new THREE.MeshStandardMaterial({ color:'#f6c62e', emissive:'#c77d10', emissiveIntensity:.35, roughness:.6 }), Math.max(1, pads.length));
+  // a small chunky blue clay arrow pointing down at each ride's gate (it bobs and spins)
+  const arrowGeo = new THREE.ExtrudeGeometry(roundArrowShape(GATE_ARROW_SIZE), { depth:.2, bevelEnabled:true, bevelThickness:.1, bevelSize:.09, bevelOffset:-.03, bevelSegments:5, curveSegments:8 });
+  arrowGeo.center(); arrowGeo.rotateZ(-Math.PI / 2);   // point it down
+  const arrows = new THREE.InstancedMesh(toCreasedNormals(arrowGeo, 1.0), new THREE.MeshStandardMaterial({ color:REEL_ARROW_COLOUR, emissive:'#1a3fa8', emissiveIntensity:.3, roughness:.55 }), Math.max(1, pads.length));
   arrows.castShadow = true;
   scene.add(arrows);
   const ring = new THREE.Mesh(new THREE.TorusGeometry(1, .08, 10, 56), padMatOn); ring.rotation.x = -Math.PI/2; ring.visible = false; scene.add(ring);
@@ -1469,17 +1531,49 @@ function stepTrains(dt){
 }
 
 // Animated water: rolling normals and a slow shimmer
-const waterUniforms = { uTime:{ value:0 } };
-const waterMat = new THREE.MeshStandardMaterial({ name:'Water', color:'#3aa3b0', roughness:.16, metalness:0 });
+// Swimming-pool caustics: a small tileable web of light (cellular noise edges), made once at load and drawn twice over the
+// sea at different sizes, drifting and gently warped so the two webs slide over each other. Cheap: two texture reads per pixel.
+const WATER_COLOUR = '#1db4eb';                                  // the sea
+const CAUSTIC_MAIN = '#47c8ee', CAUSTIC_SOFT = '#30bcec';         // the bold web of strands, and the fainter one under it
+const CAUSTIC_WIDTH = .17, CAUSTIC_SOFT_MIX = .7;                  // strand thickness (bold web; the soft one is a little thinner), and how strong the soft web is
+function makeCausticTexture(size = 256, cells = 22){
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const pts = []; for (let i = 0; i < cells; i++){ const x = rnd(), y = rnd(); for (let ox = -2; ox <= 2; ox++) for (let oy = -2; oy <= 2; oy++) if (Math.abs(ox) < 2 || Math.abs(oy) < 2) pts.push(x + ox, y + oy); }
+  const data = new Uint8Array(size * size * 4);
+  for (let py = 0; py < size; py++) for (let px = 0; px < size; px++){
+    const T = Math.PI * 2, x0 = (px + .5) / size, y0 = (py + .5) / size;
+    // a tileable wobble (whole-number frequencies) bends the straight cell edges into soft, rounded curves
+    const x = x0 + .032 * Math.sin(T * (2 * y0 + x0)) + .018 * Math.sin(T * (3 * y0 - 2 * x0)), y = y0 + .032 * Math.sin(T * (2 * x0 - y0)) + .018 * Math.sin(T * (3 * x0 + 2 * y0));
+    let f1 = 9, f2 = 9;
+    for (let k = 0; k < pts.length; k += 2){ const dx = pts[k] - x, dy = pts[k + 1] - y, d = dx * dx + dy * dy; if (d < f1){ f2 = f1; f1 = d; } else if (d < f2) f2 = d; }
+    f1 = Math.sqrt(f1); f2 = Math.sqrt(f2); const o = (py * size + px) * 4;
+    // store the distance to the nearest cell edge; the shader cuts the strands from it, so they stay crisp at any size
+    data[o] = Math.min(255, (f2 - f1) / .1 * 255); data[o + 1] = data[o + 2] = 0; data[o + 3] = 255; }
+  const t = new THREE.DataTexture(data, size, size); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true; t.anisotropy = maxAniso; t.needsUpdate = true; return t;
+}
+const waterUniforms = { uTime:{ value:0 }, uCaustic:{ value:makeCausticTexture() }, uStrand1:{ value:new THREE.Color(CAUSTIC_MAIN) }, uStrand2:{ value:new THREE.Color(CAUSTIC_SOFT) } };
+const waterMat = new THREE.MeshStandardMaterial({ name:'Water', color:WATER_COLOUR, roughness:.16, metalness:0 });
 waterMat.onBeforeCompile = sh => {
-  sh.uniforms.uTime = waterUniforms.uTime;
+  Object.assign(sh.uniforms, waterUniforms);
   sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
     .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uTime;\nvarying vec3 vWPos;')
+  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uTime;\nuniform sampler2D uCaustic;\nuniform vec3 uStrand1, uStrand2;\nvarying vec3 vWPos;')
     .replace('#include <color_fragment>', `#include <color_fragment>
       float shore = smoothstep(96.0, 80.0, length(vWPos.xz));
-      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.38, 0.78, 0.78), shore * .55);
-      diffuseColor.rgb *= 0.93 + 0.07 * sin(vWPos.x * .09 + vWPos.z * .12 + uTime * .4);`)
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.42, 0.82, 0.88), shore * .3);
+      diffuseColor.rgb *= 0.97 + 0.03 * sin(vWPos.x * .09 + vWPos.z * .12 + uTime * .4);
+      // two webs of strands, warped and drifting past each other. Each only ever lightens the sea towards its own strand colour,
+      // and they stack like a screen blend, so where they cross there's no darker edge. Faded out far away so they never shimmer.
+      vec2 cw = vWPos.xz, warp = vec2(sin(cw.y * .21 + uTime * .7) + .5 * sin(cw.x * .47 - uTime * .9), cos(cw.x * .19 - uTime * .6) + .5 * cos(cw.y * .43 + uTime * .8)) * .8;
+      float e1 = texture2D(uCaustic, (cw + warp) * .04 + vec2(uTime * .008, uTime * .005)).r;
+      float e2 = texture2D(uCaustic, (mat2(.8, -.6, .6, .8) * cw - warp * .7) * .062 + vec2(-uTime * .007, uTime * .009)).r;
+      float near = 1.0 - smoothstep(70.0, 190.0, distance(cameraPosition, vWPos));
+      float f1 = fwidth(e1) * 1.2 + .015, f2 = fwidth(e2) * 1.2 + .015;
+      float a1 = (1.0 - smoothstep(${CAUSTIC_WIDTH.toFixed(3)} - f1, ${CAUSTIC_WIDTH.toFixed(3)} + f1, e1)) * near;
+      float a2 = (1.0 - smoothstep(${(CAUSTIC_WIDTH * .75).toFixed(3)} - f2, ${(CAUSTIC_WIDTH * .75).toFixed(3)} + f2, e2)) * ${CAUSTIC_SOFT_MIX.toFixed(3)} * near;
+      diffuseColor.rgb = mix(diffuseColor.rgb, max(diffuseColor.rgb, uStrand2), a2);
+      diffuseColor.rgb = mix(diffuseColor.rgb, max(diffuseColor.rgb, uStrand1), a1);`)
     .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
       vec2 wp = vWPos.xz; float tt = uTime;
       vec2 wd = vec2(cos(wp.x * .35 + tt * 1.2) * .5 + cos(wp.y * .27 - tt * .9) * .35 + cos((wp.x + wp.y) * .6 + tt * 1.7) * .2,
