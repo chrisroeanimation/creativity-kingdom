@@ -98,12 +98,13 @@ a{color:var(--navy)}
 /* Overlays */
 .veil{position:fixed;inset:0;z-index:20;background:rgba(16,22,74,.55);display:flex;align-items:center;justify-content:center;padding:calc(env(safe-area-inset-top,0px) + 16px) 16px calc(env(safe-area-inset-bottom,0px) + 16px);overflow-y:auto}
 .card{position:relative;width:100%;max-width:760px;max-height:100%;overflow-y:auto;background:var(--cream);border:4px solid var(--navy-deep);border-radius:28px;box-shadow:0 10px 0 var(--navy-deep);padding:clamp(22px,4vw,40px);display:flex;flex-direction:column;gap:18px}
-.card h2{margin:0;font-family:var(--display);font-weight:400;font-size:clamp(32px,5.4vw,52px);line-height:.95;color:var(--lavender);-webkit-text-stroke:5px var(--navy-deep);paint-order:stroke fill;filter:drop-shadow(0 6px 0 var(--navy-deep));letter-spacing:.02em;text-wrap:balance;text-transform:uppercase;text-align:center;align-self:center;padding:0 8px 4px}
+.card h2{margin:0;font-family:var(--display);font-weight:400;font-size:clamp(32px,5.4vw,52px);line-height:.95;color:var(--lavender);-webkit-text-stroke:5px var(--navy-deep);paint-order:stroke fill;filter:drop-shadow(0 6px 0 var(--navy-deep));letter-spacing:.02em;text-wrap:balance;text-transform:uppercase;text-align:center;align-self:center;padding:14px 52px 4px}   /* side room so a long title never runs under the close button */
 .card > .eyebrow{align-self:center;text-align:center;padding:4px 56px 0}
 .card > .role{text-align:center}
+.card > .role span{display:block;margin-top:3px}   /* the company and dates on their own line, under the role */
 .card > .actions{justify-content:center}
 .card > p{align-self:center;text-align:center}
-@media (max-width:640px){.card h2{-webkit-text-stroke:4px var(--navy-deep);filter:drop-shadow(0 4px 0 var(--navy-deep))}}
+@media (max-width:640px){.card h2{padding:12px 44px 4px;-webkit-text-stroke:4px var(--navy-deep);filter:drop-shadow(0 4px 0 var(--navy-deep))}}
 .eyebrow{font-family:var(--display);font-size:15px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .role{font-size:17px;font-weight:700;color:var(--ink)}
 .role span{font-weight:500;color:var(--muted)}
@@ -300,7 +301,6 @@ body.pov :is(.hud,#prompt,#hint,#joy,#toast){display:none!important}
 <div class="veil" id="panel" hidden>
   <div class="card" role="dialog" aria-modal="true" aria-labelledby="pTitle">
     <button class="plate close" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-    <span class="eyebrow" id="pRide"></span>
     <h2 id="pTitle"></h2>
     <div class="role" id="pRole"></div>
     <div class="tags" id="pTags"></div>
@@ -428,7 +428,7 @@ const PROJECTS = [
       ['2016 – 2024','Super Strange Studios','Founder & Creative Director. Marvellous Makes (92 episodes), Chaos Castle, Sky Kids Christmas. Led five artists and animators.'],
       ['2017 – 2018','Giggle Fish · Strike','Assistant Director, Camera & Lighting, Animation Supervisor on a stop-motion feature.'],
       ['2011 – 2016','Fat Pebble','Founder & Art Director of a 24-person studio. Led an art and animation department of eight. Clay Jam, Creature Box.'],
-      ['2002 – 2011','Zoe Mode · Ninja Theory · Lionhead','Senior Artist, Animator and Senior Animator on PC and console games.'],
+      ['2002 – 2011','Zoe Mode · Ninja Theory · Lionhead','Senior Artist, Animator and Senior Animator on PC and console games, including a year in San Francisco from 2010 on secondment with Zoe Mode.'],
       ['1999 – 2002','Bournemouth University','BA Computer Animation and Visualisation.']],
     images:[], portrait:true, video:'', watch:'', links:[] },
 ];
@@ -571,9 +571,8 @@ function openProject(id){
   const p = P[id]; shownProject = id;
   discoverMedia(id).then(m => { const panelOpen = !$('#panel').hidden && shownProject === id; p.media = m; if (panelOpen && !p.mediaShown) renderMedia(p); });
   p.mediaShown = false;
-  $('#pRide').textContent = p.title.startsWith(p.ride) ? (p.theme || p.ride) : (p.theme ? `${p.ride} · ${p.theme}` : p.ride);   // don't repeat the title
   $('#pTitle').textContent = p.title;
-  $('#pRole').innerHTML = `${esc(p.role)} <span>· ${esc(p.org)}</span>`;
+  $('#pRole').innerHTML = `${esc(p.role)}${p.org ? `<span>${esc(p.org)}</span>` : ''}`;
   $('#pTags').innerHTML = p.tags.map(t=>`<span>${esc(t)}</span>`).join('');
   $('#pTags').hidden = !p.tags.length;
   p.bodyFromMedia = false;
@@ -604,7 +603,7 @@ function openProject(id){
   $('#nextBtn').onclick = () => { const i = RIDE_ORDER.indexOf(id); openProject(RIDE_ORDER[(i+1)%RIDE_ORDER.length]); };
   openVeil('#panel');
 }
-const RIDE_ORDER = ['reel','clayjam','chaos','creature','strike','makes','sky','weasels','about'];
+const RIDE_ORDER = ['reel','clayjam','makes','creature','strike','chaos','sky','weasels','about'];
 { const links = [];
   if (CONTACT_EMAIL) links.push(`<a class="plate warm email" href="mailto:${esc(CONTACT_EMAIL)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6"/></svg>${esc(CONTACT_EMAIL)}</a>`);
   links.push(`<a class="plate" href="${LINKEDIN}" target="_blank" rel="noopener">LinkedIn</a>`, `<a class="plate" href="${INSTAGRAM}" target="_blank" rel="noopener">Instagram</a>`);
