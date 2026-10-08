@@ -773,7 +773,8 @@ const SHADOW_REACH = isTouchDevice() ? 58 : 70, SHADOW_MAP = isTouchDevice() ? 2
 const REEL_ARROW_AT = [-14.3, 53.94], REEL_ARROW_DIR = [-.78, .62], REEL_ARROW_COLOUR = '#2f6dff';   // the blue arrow at the start of the path to the Showreel Coaster: where (x, z) and which way
 const SKITTLES_AT = [0, 25.5];
 const GATE_ARROW_SIZE = .36;
-const SNOWMAN_TURN = .25;   // the Sky Kids snowman turns a little towards the path (radians)   // the little arrows over the ride gates, as a fraction of the path arrow   // the skittles' triangle on the path to Chaos Castle (x, z)
+const SNOWMAN_TURN = .25;
+const EYE_IRIS_LIFT = 1.03;   // how far the irises on the big eyes sit out from the eyeball (1 = as modelled)   // the Sky Kids snowman turns a little towards the path (radians)   // the little arrows over the ride gates, as a fraction of the path arrow   // the skittles' triangle on the path to Chaos Castle (x, z)
 sun.shadow.mapSize.set(SHADOW_MAP, SHADOW_MAP);
 Object.assign(sun.shadow.camera, { left:-SHADOW_REACH, right:SHADOW_REACH, top:SHADOW_REACH, bottom:-SHADOW_REACH, near:1, far:200 });
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.05;
@@ -1206,6 +1207,16 @@ function buildFromGLTF(gltf){
         collide(cx, cz, 1.6);
       }
     }
+  }
+  { // The big floating eyes: lift each iris (and its pupil and highlight) out from the eyeball very slightly, so its round edge
+    // sits just on the surface instead of sinking into the white.
+    const done = new Set();
+    byRe(/^FloatingEye(_\d+)?$/).forEach(eye => eye.traverse(m => {
+      if (!m.isMesh || done.has(m.geometry)) return; done.add(m.geometry);
+      const g = m.geometry, pos = g.attributes.position, col = g.attributes.color; if (!col) return;
+      const isWhite = i => Math.abs(col.getX(i) - .91) < .03 && Math.abs(col.getY(i) - .88) < .03 && Math.abs(col.getZ(i) - .82) < .04;
+      for (let i = 0; i < pos.count; i++) if (!isWhite(i)) pos.setXYZ(i, pos.getX(i) * EYE_IRIS_LIFT, pos.getY(i) * EYE_IRIS_LIFT, pos.getZ(i) * EYE_IRIS_LIFT);
+      pos.needsUpdate = true; g.computeBoundingSphere(); }));
   }
   const numeric = (a, b) => a.name.localeCompare(b.name, undefined, { numeric:true });
 
