@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="description" content="Chris Roe — Creative, Art & Animation Director. Walk around a handmade clay theme park where every ride is one of my projects.">
 <title>Chris Roe – Creative, Art & Animation Director | Creativity Kingdom</title>
 <link rel="canonical" href="https://www.chrisroeanimation.com/">
@@ -48,7 +48,13 @@
 }
 [hidden]{display:none!important}
 html,body{height:100%;overflow:hidden}
-body{background:#d9c3a0;color:var(--ink);font-family:var(--body);font-size:16px;-webkit-font-smoothing:antialiased;touch-action:none}
+body{background:#d9c3a0;color:var(--ink);font-family:var(--body);font-size:16px;-webkit-font-smoothing:antialiased;touch-action:none;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+/* the park and its controls can't be text-selected, long-press highlighted or tap-flashed; the reading panels still allow copying text */
+body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+.card :is(p,li,blockquote,cite,h2,h3,.role,a[href^="mailto"]){-webkit-user-select:text;user-select:text}
+/* scrolling panels can be swiped but never pinched or double-tapped into a page zoom */
+.veil,.veil *,#viewer,#viewer *{touch-action:pan-x pan-y}
+button,a,.plate{touch-action:manipulation}
 #scene{position:fixed;inset:0;width:100%;height:100%;display:block;outline:none}
 button{font:inherit;cursor:pointer}
 a{color:var(--navy)}
@@ -140,7 +146,7 @@ a{color:var(--navy)}
 #povExit svg{width:24px;height:24px}
 body.pov :is(.hud,#prompt,#hint,#joy,#toast){display:none!important}
 #viewer{position:fixed;inset:0;z-index:60;background:rgba(8,10,28,.92);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);display:flex}
-#viewer .vstrip{flex:1;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;touch-action:pan-x pinch-zoom;overscroll-behavior:contain}
+#viewer .vstrip{flex:1;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;touch-action:pan-x;overscroll-behavior:contain}
 #viewer .vstrip::-webkit-scrollbar{display:none}
 #viewer .vslide{flex:0 0 100%;margin:0;height:100%;scroll-snap-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:64px clamp(12px,7vw,96px) 52px;box-sizing:border-box}
 #viewer .vslide img{max-width:100%;max-height:calc(100% - 30px);object-fit:contain;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.5);user-select:none;-webkit-user-drag:none}
@@ -1747,12 +1753,15 @@ addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 $('#promptBtn').onclick = () => { if (activeZone) openProject(activeZone.id); };
 
 const joy = { x:0, y:0, id:null };
+let resetJoy = () => {}, resetPinch = () => {};
+function resetTouchInput(){ resetJoy(); resetPinch(); }
 { const el = $('#joy'), knob = $('#knob');
   const move = e => { const r = el.getBoundingClientRect(); let dx = e.clientX - (r.left + r.width/2), dy = e.clientY - (r.top + r.height/2); const m = Math.hypot(dx, dy), R = r.width/2 - 10; if (m > R){ dx *= R/m; dy *= R/m; } joy.x = dx/R; joy.y = dy/R; knob.style.transform = `translate(${dx}px,${dy}px)`; };
   el.addEventListener('pointerdown', e => { joy.id = e.pointerId; el.setPointerCapture(e.pointerId); move(e); });
   el.addEventListener('pointermove', e => { if (e.pointerId === joy.id) move(e); });
   const end = e => { if (e.pointerId !== joy.id) return; joy.id = null; joy.x = joy.y = 0; knob.style.transform = ''; };
-  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end); }
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end); el.addEventListener('lostpointercapture', end);
+  resetJoy = () => { if (joy.id != null){ try { el.releasePointerCapture(joy.id); } catch (e) {} } joy.id = null; joy.x = joy.y = 0; knob.style.transform = ''; }; }
 // zoom: starts pulled back so the park reads at a glance; mouse wheel on desktop, pinch on touch screens
 const ZOOM_MIN = .12, ZOOM_MAX = 2.1, ZOOM_GUEST = .6;   // below ZOOM_GUEST the camera eases down to guest height
 // camera framing for a zoom level (0 = overview … 1 = guest's-eye view in imm)
@@ -1779,7 +1788,8 @@ canvas.addEventListener('wheel', e => { e.preventDefault(); zoom = THREE.MathUti
   canvas.addEventListener('pointerdown', e => { if (e.pointerType !== 'touch') return; touches.set(e.pointerId, { x:e.clientX, y:e.clientY }); if (touches.size === 2){ pinch0 = spread(); zoom0 = zoom; } });
   canvas.addEventListener('pointermove', e => { if (!touches.has(e.pointerId)) return; touches.set(e.pointerId, { x:e.clientX, y:e.clientY }); if (touches.size === 2 && pinch0 > 0){ e.preventDefault(); zoom = THREE.MathUtils.clamp(zoom0 * pinch0 / Math.max(20, spread()), ZOOM_MIN, ZOOM_MAX); } });
   const lift = e => { touches.delete(e.pointerId); if (touches.size < 2) pinch0 = 0; };
-  canvas.addEventListener('pointerup', lift); canvas.addEventListener('pointercancel', lift); canvas.addEventListener('pointerleave', lift); }
+  canvas.addEventListener('pointerup', lift); canvas.addEventListener('pointercancel', lift); canvas.addEventListener('pointerleave', lift);
+  resetPinch = () => { touches.clear(); pinch0 = 0; }; }
 
 function buildMapList(){
   const names = {'clayjam': 'Clay Jam', 'chaos': 'Chaos Castle', 'makes': 'Marvellous Makes', 'sky': 'Sky Kids Christmas', 'strike': 'Strike', 'creature': 'Creature Box', 'weasels': 'Wattle Weasels', 'reel': 'Showreel Coaster', 'about': 'About Me & CV'};
@@ -1938,6 +1948,20 @@ function stepPOV(dt){
 const camPos = new THREE.Vector3(0, 40, 100), look = new THREE.Vector3(0, 0, 50);
 function resize(){ const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
+// Keep the page itself at 100%: the park zooms its camera, never the website. (Pinch on iPhone/iPad, trackpad pinch or
+// ctrl + scroll on a computer, and double-tap would otherwise zoom the whole page and push the buttons off screen.)
+for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, e => e.preventDefault(), { passive:false });
+addEventListener('wheel', e => { if (e.ctrlKey){ e.preventDefault(); if (e.target === canvas) return; zoom = THREE.MathUtils.clamp(zoom * (1 + THREE.MathUtils.clamp(e.deltaY, -120, 120) * .0012), ZOOM_MIN, ZOOM_MAX); } }, { passive:false });
+document.addEventListener('touchmove', e => { if (e.touches.length > 1 && !e.target.closest('#viewer .vstrip')) e.preventDefault(); }, { passive:false });
+document.addEventListener('contextmenu', e => { if (!e.target.closest('.card')) e.preventDefault(); });   // no long-press menu over the park
+// After a resize or a phone rotation: let go of any half-finished touches (a rotation can swallow the 'finger lifted'),
+// undo any stray page scroll or zoom, and measure again once the browser has settled.
+function settleViewport(){
+  resetTouchInput(); window.scrollTo(0, 0); document.documentElement.scrollTop = document.body.scrollTop = 0;
+  resize(); setTimeout(resize, 250); setTimeout(() => { resize(); window.scrollTo(0, 0); }, 700); }
+addEventListener('orientationchange', settleViewport);
+if (window.visualViewport) visualViewport.addEventListener('resize', () => { if (Math.abs(visualViewport.scale - 1) > .01) window.scrollTo(0, 0); });
+{ let rt = 0; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(settleViewport, 120); }); }
 
 const clock = new THREE.Clock(); let T = 0;
 function frame(){
