@@ -32,7 +32,7 @@
 <meta property="og:image" content="https://www.chrisroeanimation.com/img/share.jpg">
 <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"Person","name":"Chris Roe","jobTitle":"Creative, Art & Animation Director","url":"https://www.chrisroeanimation.com/","email":"mailto:chris@chrisroeanimation.com","address":{"@type":"PostalAddress","addressRegion":"West Sussex","addressCountry":"GB"},"sameAs":["https://www.linkedin.com/in/chris-roe-1392542/","https://www.instagram.com/chrisroeanimation/"]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.chrisroeanimation.com/#site","name":"Chris Roe's Creativity Kingdom","url":"https://www.chrisroeanimation.com/","author":{"@id":"https://www.chrisroeanimation.com/#chris"}},{"@type":"ProfilePage","@id":"https://www.chrisroeanimation.com/#page","url":"https://www.chrisroeanimation.com/","name":"Chris Roe – Creative, Art & Animation Director","mainEntity":{"@id":"https://www.chrisroeanimation.com/#chris"},"isPartOf":{"@id":"https://www.chrisroeanimation.com/#site"}},{"@type":"Person","@id":"https://www.chrisroeanimation.com/#chris","name":"Chris Roe","url":"https://www.chrisroeanimation.com/","jobTitle":"Creative, Art & Animation Director","description":"BAFTA-nominated Art Director, Creative Director and Animation Director with over 20 years in games, TV and film, combining physical sets, puppets and handmade materials with CG and real-time production. Creator of Clay Jam.","image":"https://www.chrisroeanimation.com/img/portrait.jpg","email":"mailto:chris@chrisroeanimation.com","address":{"@type":"PostalAddress","addressRegion":"West Sussex","addressCountry":"GB"},"worksFor":{"@type":"Organization","name":"YumYumYukYuk","url":"https://yumyumyukyuk.com"},"alumniOf":{"@type":"CollegeOrUniversity","name":"Bournemouth University"},"award":["BAFTA Games Awards 2013 nominee, Family category (Clay Jam)","Former BAFTA judge"],"knowsAbout":["Art direction","Creative direction","Animation direction","Stop-motion animation","Claymation","Game art","World building","Character design","Miniature sets and puppets","Real-time 3D","Themed environments","Team leadership"],"sameAs":["https://www.linkedin.com/in/chris-roe-1392542/","https://www.instagram.com/chrisroeanimation/"]},{"@type":"VideoGame","name":"Clay Jam","creator":{"@id":"https://www.chrisroeanimation.com/#chris"},"description":"I created the concept, the characters and the handmade world of Clay Jam, a ridiculously happy mobile game where every creature, prop and hillside is real, squishy plasticine, photographed and brought into the game.","award":"BAFTA Games Awards 2013 nominee, Family category","gamePlatform":["iOS","Android"]},{"@type":"VideoGame","name":"Play-Doh Jam","creator":{"@id":"https://www.chrisroeanimation.com/#chris"},"description":"In 2015 Hasbro asked us to bring Clay Jam into the world of Play-Doh. I directed a small team to create Play-Doh Jam, a new version of the game for the App Store and Google Play, with characters, props and landscapes sculpted by hand from real Play-Doh and photographed into the game."},{"@type":"TVSeries","name":"Marvellous Makes","creator":{"@id":"https://www.chrisroeanimation.com/#chris"},"director":{"@id":"https://www.chrisroeanimation.com/#chris"},"numberOfEpisodes":92,"description":"Marvellous Makes brings to life the joy of making things with plasticine and simple household objects. It isn’t about making things perfectly; it’s about getting creative and having a go."},{"@type":"Movie","name":"Strike","contributor":{"@id":"https://www.chrisroeanimation.com/#chris"},"description":"A fast-paced, low-budget stop-motion feature where I combined creative leadership with hands-on making: miniature buildings, interior and exterior sets, character models, moulds for silicone puppets, and lighting and camera set-ups."},{"@type":"CreativeWork","name":"Chaos Castle","creator":{"@id":"https://www.chrisroeanimation.com/#chris"},"description":"A wobbly clay castle on a rock in the sea, wrapped in a rollercoaster slide and home to a gang of gloriously odd residents. It sits at the heart of this park because it’s the purest version of what I love making: a place you want to climb into."},{"@type":"CreativeWork","name":"Sky Kids Christmas","director":{"@id":"https://www.chrisroeanimation.com/#chris"},"description":"A run of festive interstitials for Sky Kids, set in a snowy clay village with a plasticine Santa, a snowman and a gingerbread friend."},{"@type":"Movie","name":"Wattle Weasels","director":{"@id":"https://www.chrisroeanimation.com/#chris"},"description":"A short film about the turbulent love life of the rare wattle weasel, made with a single puppet shot many times with interchangeable wattles, beaks and legs."},{"@type":"VideoGame","name":"Creature Box","creator":{"@id":"https://www.chrisroeanimation.com/#chris"},"description":"A handmade game about matchboxes that open onto fantastical miniature worlds, each one built by hand and brought to life with stop-motion."}]}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=DM+Sans:opsz,wght@9..40,400..700&display=swap">
@@ -55,6 +55,8 @@ body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webki
 /* scrolling panels can be swiped but never pinched or double-tapped into a page zoom */
 .veil,.veil *,#viewer,#viewer *{touch-action:pan-x pan-y}
 button,a,.plate{touch-action:manipulation}
+/* the text version of the portfolio: read by search engines and screen readers, never drawn on screen */
+.textver{position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:normal}
 #scene{position:fixed;inset:0;width:100%;height:100%;display:block;outline:none}
 button{font:inherit;cursor:pointer}
 a{color:var(--navy)}
@@ -253,6 +255,91 @@ body.pov :is(.hud,#prompt,#hint,#joy,#toast){display:none!important}
 @media (max-width:430px){.badge span{display:none}}
 @media (prefers-reduced-motion:reduce){.toast,.prompt,.plate{transition:none}}
 </style>
+
+<!-- TEXT VERSION:START (generated from the project text; a readable version of the park for search engines and screen readers) -->
+<main class="textver" id="textVersion" aria-label="Text version of the portfolio">
+<h2>Chris Roe – Creative, Art &amp; Animation Director</h2>
+<p>Chris Roe is a BAFTA-nominated Art Director, Creative Director and Animation Director based in West Sussex, UK, and the creator of Clay Jam.</p>
+<p>I design original worlds, find ways to build them, and lead the teams that bring them to life. For over 20 years I&#x27;ve combined physical sets, puppets and handmade materials with CG and real-time production across games, TV and film.</p>
+<p>This website is Chris Roe’s Creativity Kingdom: an interactive clay theme park where every ride is one of his projects.</p>
+<article id="text-reel">
+<h3>Showreel &amp; Portfolio</h3>
+<p><strong>Creator · Art &amp; Animation Director</strong> – 2002 – today</p>
+<p>A walk through the worlds I’ve created and the teams I’ve led, from the first idea to the finished game, series and film. Ride the coaster, then watch the reel.</p>
+<p><a href="https://youtu.be/Gkdbdh3PT-g" tabindex="-1">Watch on YouTube</a></p>
+</article>
+<article id="text-clayjam">
+<h3>Clay Jam</h3>
+<p><strong>Creator &amp; original Art Director</strong> – Fat Pebble · 2011–2016</p>
+<ul><li>BAFTA-nominated 2013</li><li>10M+ players</li><li>Handmade clay world</li><li>Clay Jam 2 in production</li></ul>
+<p>I created the concept, the characters and the handmade world of Clay Jam, a ridiculously happy mobile game where every creature, prop and hillside is real, squishy plasticine, photographed and brought into the game.</p>
+<p>As a founder of Fat Pebble, a 24-person studio, I led its art and animation department of eight and set the visual rules everyone built to, so every new creature felt like it came from the same hands. The game was nominated in the Family category at the 2013 BAFTA Games Awards and has reached more than 10 million players.</p>
+<p>Now at YumYumYukYuk, I’m creating the world for Clay Jam 2, currently in production.</p>
+<blockquote><p>“Full of character and colour.”</p><cite>Pocket Gamer</cite></blockquote>
+<blockquote><p>“An incredible artistic and technical achievement.”</p><cite>Modojo</cite></blockquote>
+<blockquote><p>“Every lovingly-molded inch of Clay Jam is an uncanny delight.”</p><cite>Kotaku</cite></blockquote>
+<blockquote><p>“Clay Jam is a blast to play for kids and kids at heart.”</p><cite>USA Today</cite></blockquote>
+<h4>Play-Doh Jam for Hasbro</h4>
+<p>In 2015 Hasbro asked us to bring Clay Jam into the world of Play-Doh. I directed a small team to create Play-Doh Jam, a new version of the game for the App Store and Google Play, with characters, props and landscapes sculpted by hand from real Play-Doh and photographed into the game.</p>
+<p>The job was to make it unmistakably Play-Doh while keeping the handmade charm that made Clay Jam special: the brand’s bright signature colours, its soft, squashy shapes and its spirit of play in every creature and hillside, so the game sat naturally within one of the world’s best-known toy brands.</p>
+<h4>Famous characters, made in clay</h4>
+<p>Clay Jam’s look also caught the eye of other big names, and we were approached to make claymation games for SpongeBob SquarePants and Angry Birds. For each, I created clay visuals that turned much-loved characters into something hand-made and fun while staying true to every nuance fans know by heart: their proportions, expressions, colours and the small details that make them who they are.</p>
+<p><a href="https://yumyumyukyuk.com" tabindex="-1">YumYumYukYuk</a> · <a href="https://apps.apple.com/app/clay-jam-classic/id6759738137" tabindex="-1">App Store</a> · <a href="https://play.google.com/store/apps/details?id=com.yumyumyukyuk.clayjamclassic" tabindex="-1">Google Play</a></p>
+</article>
+<article id="text-makes">
+<h3>Marvellous Makes &amp; Lab</h3>
+<p><strong>Creator, Director &amp; Producer</strong> – Super Strange Studios · 2016–2024</p>
+<ul><li>92 episodes</li><li>Stop-motion series</li><li>Sky Kids · Azoomee · Da Vinci</li><li>Sets, props &amp; lighting</li></ul>
+<p>Marvellous Makes brings to life the joy of making things with plasticine and simple household objects. It isn’t about making things perfectly; it’s about getting creative and having a go.</p>
+<p>Its spin-off, Marvellous Makes Lab, turns everyday objects into experiments you can do at home, from an air cannon to a lava lamp to a paper helicopter that really flies.</p>
+<p>I created and produced all 92 episodes, built the physical sets, sourced the props and directed the lighting, leading a team of five artists and animators.</p>
+</article>
+<article id="text-creature">
+<h3>Creature Box</h3>
+<p><strong>World creator &amp; Art Director</strong> – Fat Pebble</p>
+<ul><li>Directed 8 artists</li><li>Handmade miniature world</li><li>Unreleased game</li></ul>
+<p>A handmade game about matchboxes that open onto fantastical miniature worlds, each one built by hand and brought to life with stop-motion.</p>
+<p>I created the world and directed eight artists in building and animating its characters and environments. The game is unreleased, but the miniature world, finished animation and development work stand on their own.</p>
+</article>
+<article id="text-strike">
+<h3>Strike</h3>
+<p><strong>Assistant Director, Camera &amp; Lighting, Animation Supervisor</strong> – Giggle Fish · 2017–2018</p>
+<ul><li>Stop-motion feature film</li><li>Miniature sets &amp; puppets</li><li>Practical + CG</li><li>Post team of ~10</li></ul>
+<p>A fast-paced, low-budget stop-motion feature where I combined creative leadership with hands-on making: miniature buildings, interior and exterior sets, character models, moulds for silicone puppets, and lighting and camera set-ups.</p>
+<p>The budget meant constantly finding inventive ways to get a shot using practical and CG techniques. I also assembled a post-production team of around ten and worked directly on editing, post and visual effects.</p>
+</article>
+<article id="text-chaos">
+<h3>Chaos Castle</h3>
+<p><strong>Creator &amp; Creative Director</strong> – Super Strange Studios</p>
+<ul><li>Original IP</li><li>Animated series &amp; game</li><li>Uncommissioned development</li></ul>
+<p>A wobbly clay castle on a rock in the sea, wrapped in a rollercoaster slide and home to a gang of gloriously odd residents. It sits at the heart of this park because it’s the purest version of what I love making: a place you want to climb into.</p>
+<p>I developed Chaos Castle as original television and interactive game IP, designing the characters, the world and the pitch materials to carry it across play, watch and create. The project was not commissioned.</p>
+</article>
+<article id="text-sky">
+<h3>Sky Kids Christmas</h3>
+<p><strong>Director &amp; Producer</strong> – Super Strange Studios</p>
+<ul><li>Christmas interstitials</li><li>Clay characters</li><li>Broadcast</li></ul>
+<p>A run of festive interstitials for Sky Kids, set in a snowy clay village with a plasticine Santa, a snowman and a gingerbread friend.</p>
+</article>
+<article id="text-weasels">
+<h3>Wattle Weasels</h3>
+<p><strong>Writer, Director &amp; Producer</strong> – Short film</p>
+<ul><li>Puppetry / CG hybrid</li><li>Motion tracking</li></ul>
+<p>A short film about the turbulent love life of the rare wattle weasel, made with a single puppet shot many times with interchangeable wattles, beaks and legs.</p>
+<p>I motion tracked the live-action puppet footage and added expressive CG eyes, the same practical-plus-digital approach I used on a freelance Siemens film.</p>
+</article>
+<article id="text-about">
+<h3>Hello, I’m Chris</h3>
+<p><strong>Creative, Art &amp; Animation Director</strong> – West Sussex, UK</p>
+<ul><li>20+ years</li><li>BAFTA-nominated</li><li>Former BAFTA judge</li><li>Founder of 3 studios</li></ul>
+<p>I’m Chris Roe, an art and animation director who designs original worlds, finds ways to build them, and leads the teams that bring them to life. My work spans games, television and film, combining physical sets, puppets and handmade materials with CG and real-time interactive production.</p>
+<p>I’ve loved theme parks all my life: the way scenery, characters, lighting, sound and effects combine to make a world feel convincing. That’s what I chase on every project, with a clear vision carried faithfully by every team that touches it.</p>
+<p>I’m a calm, approachable creative lead who likes setting a clear direction, listening to specialists and giving feedback that helps people do their best work. Running studios has also taught me to plan, schedule and cost creative work.</p>
+<h4>CV</h4><ol><li>Now: <strong>YumYumYukYuk</strong>. Founder, Creative &amp; Art Director. Creating the world for Clay Jam 2 and leading a small team of contractors.</li><li>2024 – now: <strong>Freelance Animation Director</strong>. Mainly with Move Animation Studio: Magic Maya, Bubblegum Pie, LEGO and Mattel.</li><li>2023 – 2024: <strong>Aardman Animations</strong>. Animator &amp; 3D Generalist: Chicken Run: Eggstraction, interactive projects, IP asset oversight.</li><li>2016 – 2024: <strong>Super Strange Studios</strong>. Founder &amp; Creative Director. Marvellous Makes (92 episodes), Chaos Castle, Sky Kids Christmas. Led five artists and animators.</li><li>2017 – 2018: <strong>Giggle Fish · Strike</strong>. Assistant Director, Camera &amp; Lighting, Animation Supervisor on a stop-motion feature.</li><li>2011 – 2016: <strong>Fat Pebble</strong>. Founder &amp; Art Director of a 24-person studio. Led an art and animation department of eight. Clay Jam, Creature Box.</li><li>2002 – 2011: <strong>Zoe Mode · Ninja Theory · Lionhead</strong>. Senior Artist, Animator and Senior Animator on PC and console games, including a year in San Francisco from 2010 on secondment with Zoe Mode.</li><li>1999 – 2002: <strong>Bournemouth University</strong>. BA Computer Animation and Visualisation.</li></ol>
+</article>
+<p>Contact: <a href="mailto:chris@chrisroeanimation.com" tabindex="-1">chris@chrisroeanimation.com</a> · <a href="https://www.linkedin.com/in/chris-roe-1392542/" tabindex="-1">LinkedIn</a> · <a href="https://www.instagram.com/chrisroeanimation/" tabindex="-1">Instagram</a></p>
+</main>
+<!-- TEXT VERSION:END -->
 
 <canvas id="scene" tabindex="0" aria-label="Interactive 3D theme park. Walk with arrow keys or WASD."></canvas>
 
