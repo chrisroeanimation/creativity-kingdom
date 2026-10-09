@@ -152,6 +152,11 @@ body.pov :is(.hud,#prompt,#hint,#joy,#toast){display:none!important}
 #viewer .vstrip::-webkit-scrollbar{display:none}
 #viewer .vslide{flex:0 0 100%;margin:0;height:100%;scroll-snap-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:64px clamp(12px,7vw,96px) 52px;box-sizing:border-box}
 #viewer .vslide img{max-width:100%;max-height:calc(100% - 30px);object-fit:contain;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.5);user-select:none;-webkit-user-drag:none}
+#viewer .vslide img{cursor:zoom-in;transform-origin:center;will-change:transform}
+#viewer.zoomed .vstrip{overflow:hidden;touch-action:none}
+#viewer.zoomed .vslide img{cursor:grab}
+#viewer.zoomed .vslide img:active{cursor:grabbing}
+#viewer.zoomed .vslide figcaption,#viewer.zoomed .vcount{opacity:0;transition:opacity .2s}
 #viewer .vslide figcaption{color:#f3eedf;font-size:15px;text-align:center;max-width:70ch}
 #viewer .vclose{position:absolute;top:14px;right:14px}
 #viewer .varrow{position:absolute;top:50%;transform:translateY(-50%);width:52px;height:52px;padding:0}
@@ -1820,18 +1825,73 @@ const keys = {};
 
 /* ───────────── PICTURE VIEWER ───────────── */
 let vIdx = 0, vN = 0, vReturn = null;
-function vGo(i, smooth = true){ vIdx = Math.max(0, Math.min(vN - 1, i)); const st = $('#vStrip'); if (!smooth){ st.scrollLeft = vIdx * st.clientWidth; vUpdate(); return; } st.scrollTo({ left:vIdx * st.clientWidth, behavior:smooth ? 'smooth' : 'auto' }); vUpdate(); }
+function vGo(i, smooth = true){ vzReset(); vIdx = Math.max(0, Math.min(vN - 1, i)); const st = $('#vStrip'); if (!smooth){ st.scrollLeft = vIdx * st.clientWidth; vUpdate(); return; } st.scrollTo({ left:vIdx * st.clientWidth, behavior:smooth ? 'smooth' : 'auto' }); vUpdate(); }
 function vUpdate(){ $('#vCount').textContent = vN > 1 ? `${vIdx + 1} / ${vN}` : ''; $('#vPrev').disabled = vIdx <= 0; $('#vNext').disabled = vIdx >= vN - 1; $('#vPrev').hidden = $('#vNext').hidden = vN < 2; }
 function openViewer(list, i){
   vReturn = document.activeElement; vN = list.length;
   $('#vStrip').innerHTML = list.map(p => `<figure class="vslide"><img src="${esc(p.src)}" alt="${esc(p.alt)}">${p.cap ? `<figcaption>${esc(p.cap)}</figcaption>` : ''}</figure>`).join('');
   $('#viewer').hidden = false; vGo(i, false); requestAnimationFrame(() => vGo(vIdx, false)); $('#vClose').focus({ preventScroll:true });
 }
-function closeViewer(){ $('#viewer').hidden = true; $('#vStrip').innerHTML = ''; vReturn && vReturn.focus && vReturn.focus({ preventScroll:true }); }
+function closeViewer(){ vzReset(); $('#viewer').hidden = true; $('#vStrip').innerHTML = ''; vReturn && vReturn.focus && vReturn.focus({ preventScroll:true }); }
 $('#vClose').onclick = closeViewer; $('#vPrev').onclick = () => vGo(vIdx - 1); $('#vNext').onclick = () => vGo(vIdx + 1);
-$('#vStrip').addEventListener('scroll', () => { const st = $('#vStrip'), i = Math.round(st.scrollLeft / st.clientWidth); if (i !== vIdx){ vIdx = i; vUpdate(); } }, { passive:true });
-$('#vStrip').addEventListener('click', e => { if (!e.target.closest('img, figcaption')) closeViewer(); });   // click the dark background to close
+$('#vStrip').addEventListener('scroll', () => { const st = $('#vStrip'), i = Math.round(st.scrollLeft / st.clientWidth); if (i !== vIdx){ vzReset(); vIdx = i; vUpdate(); } }, { passive:true });
+$('#vStrip').addEventListener('click', e => { if (vz.moved){ vz.moved = false; return; } if (!e.target.closest('img, figcaption')) closeViewer(); });   // click the dark background to close
 addEventListener('resize', () => { if (!$('#viewer').hidden) vGo(vIdx, false); });
+
+/* Zooming into a picture in the viewer: pinch (phones and tablets), scroll wheel or trackpad pinch (computers), or double-tap /
+   double-click to jump in and back out. Drag to look around while zoomed. Only the picture zooms, never the page; and while a
+   picture is zoomed, swiping moves around the picture instead of changing to the next one. */
+const VZ_MAX = 5, VZ_TAP = 2.5;   // most zoom, and how far a double-tap / double-click zooms in
+const vz = { s:1, x:0, y:0, img:null, base:null, moved:false };
+const vzImg = () => $('#vStrip').children[vIdx]?.querySelector('img') || null;
+// where the picture sits when not zoomed (measured once per picture, with the zoom taken off)
+function vzBase(){ if (vz.base) return vz.base; const im = vz.img, tr = im.style.transition, tf = im.style.transform;
+  im.style.transition = 'none'; im.style.transform = 'none'; const r = im.getBoundingClientRect(); im.style.transform = tf; void im.offsetWidth; im.style.transition = tr;
+  return vz.base = { cx:r.left + r.width / 2, cy:r.top + r.height / 2, w:r.width, h:r.height }; }
+function vzClamp(b){ const W = innerWidth, H = innerHeight, w = b.w * vz.s, h = b.h * vz.s;
+  vz.x = w <= W ? 0 : Math.min(w / 2 - b.cx, Math.max(W - b.cx - w / 2, vz.x));
+  vz.y = h <= H ? 0 : Math.min(h / 2 - b.cy, Math.max(H - b.cy - h / 2, vz.y)); }
+function vzApply(anim){ const im = vz.img; if (!im) return; im.style.transition = anim ? 'transform .25s ease' : 'none';
+  im.style.transform = vz.s > 1.001 ? `translate(${vz.x}px,${vz.y}px) scale(${vz.s})` : ''; $('#viewer').classList.toggle('zoomed', vz.s > 1.001); }
+function vzReset(anim = false){ if (vz.img){ vz.s = 1; vz.x = vz.y = 0; vzApply(anim); } vz.img = null; vz.base = null; $('#viewer').classList.remove('zoomed'); }
+// zoom to scale s keeping the screen point (px, py) still under the finger / pointer
+function vzZoomAt(s, px, py, anim = false){ if (!vz.img) vz.img = vzImg(); if (!vz.img) return; const b = vzBase();
+  const lx = (px - b.cx - vz.x) / vz.s, ly = (py - b.cy - vz.y) / vz.s; vz.s = Math.min(VZ_MAX, Math.max(1, s));
+  vz.x = px - b.cx - vz.s * lx; vz.y = py - b.cy - vz.s * ly; vzClamp(b); vzApply(anim); if (vz.s <= 1.001) vzReset(anim); }
+{ const st = $('#vStrip'), V = $('#viewer');
+  // computers: wheel / trackpad pinch over the picture
+  V.addEventListener('wheel', e => { if (!e.target.closest('.vslide img') && vz.s <= 1.001) return; e.preventDefault();
+    vzZoomAt(vz.s * Math.exp(-THREE.MathUtils.clamp(e.deltaY, -100, 100) * (e.ctrlKey ? .01 : .0025)), e.clientX, e.clientY); }, { passive:false });
+  st.addEventListener('dblclick', e => { if (!e.target.closest('.vslide img')) return; e.preventDefault(); if (vz.s > 1.001) vzReset(true); else vzZoomAt(VZ_TAP, e.clientX, e.clientY, true); });
+  // computers: drag a zoomed picture around
+  let drag = null;
+  st.addEventListener('pointerdown', e => { if (e.pointerType === 'touch' || vz.s <= 1.001 || e.button !== 0) return; drag = { x:e.clientX, y:e.clientY, tx:vz.x, ty:vz.y }; st.setPointerCapture(e.pointerId); e.preventDefault(); });
+  st.addEventListener('pointermove', e => { if (!drag) return; vz.x = drag.tx + e.clientX - drag.x; vz.y = drag.ty + e.clientY - drag.y; if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > 4) vz.moved = true; vzClamp(vzBase()); vzApply(false); });
+  const endDrag = () => { drag = null; }; st.addEventListener('pointerup', endDrag); st.addEventListener('pointercancel', endDrag);
+  // phones and tablets: the classic pinch, one-finger pan while zoomed, double-tap to zoom in or back out
+  let t0 = null, lastTap = { t:0, x:0, y:0 };
+  const pts = e => [...e.touches].map(t => ({ x:t.clientX, y:t.clientY }));
+  st.addEventListener('touchstart', e => { const p = pts(e);
+    if (p.length === 2){ if (!vz.img) vz.img = vzImg(); if (!vz.img) return; const b = vzBase(), mx = (p[0].x + p[1].x) / 2, my = (p[0].y + p[1].y) / 2;
+      t0 = { pinch:true, d:Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) || 1, s:vz.s, lx:(mx - b.cx - vz.x) / vz.s, ly:(my - b.cy - vz.y) / vz.s };
+      V.classList.add('zoomed'); if (e.cancelable) e.preventDefault(); }
+    else if (p.length === 1){ t0 = { pinch:false, x:p[0].x, y:p[0].y, tx:vz.x, ty:vz.y, moved:false }; if (vz.s > 1.001 && e.cancelable) e.preventDefault(); } }, { passive:false });
+  st.addEventListener('touchmove', e => { if (!t0) return; const p = pts(e);
+    if (t0.pinch && p.length >= 2){ const b = vzBase(), mx = (p[0].x + p[1].x) / 2, my = (p[0].y + p[1].y) / 2;
+      vz.s = Math.min(VZ_MAX, Math.max(.85, t0.s * Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) / t0.d));
+      vz.x = mx - b.cx - vz.s * t0.lx; vz.y = my - b.cy - vz.s * t0.ly; if (vz.s >= 1) vzClamp(b); vzApply(false); vz.moved = true; if (e.cancelable) e.preventDefault(); }
+    else if (!t0.pinch && p.length === 1){ if (Math.hypot(p[0].x - t0.x, p[0].y - t0.y) > 8) t0.moved = true;
+      if (vz.s > 1.001){ vz.x = t0.tx + p[0].x - t0.x; vz.y = t0.ty + p[0].y - t0.y; vzClamp(vzBase()); vzApply(false); vz.moved = true; if (e.cancelable) e.preventDefault(); } } }, { passive:false });
+  st.addEventListener('touchend', e => { if (!t0) return;
+    if (t0.pinch){ if (e.touches.length === 0){ t0 = null; if (vz.s < 1.02) vzReset(true); else { vzClamp(vzBase()); vzApply(true); } }
+      else if (e.touches.length === 1){ const q = e.touches[0]; t0 = { pinch:false, x:q.clientX, y:q.clientY, tx:vz.x, ty:vz.y, moved:true }; } return; }
+    if (e.touches.length === 0){ const c = e.changedTouches[0], now = e.timeStamp;
+      if (!t0.moved && c){ if (now - lastTap.t < 300 && Math.hypot(c.clientX - lastTap.x, c.clientY - lastTap.y) < 30 && e.target.closest('.vslide img')){
+          if (e.cancelable) e.preventDefault(); vz.moved = true; if (vz.s > 1.001) vzReset(true); else vzZoomAt(VZ_TAP, c.clientX, c.clientY, true); lastTap.t = 0; }
+        else lastTap = { t:now, x:c.clientX, y:c.clientY }; }
+      t0 = null; } }, { passive:false });
+  st.addEventListener('touchcancel', () => { t0 = null; if (vz.s < 1.02) vzReset(true); });
+}
 addEventListener('keydown', e => { if ($('#viewer').hidden) return;
   if (e.key === 'Escape'){ closeViewer(); e.stopImmediatePropagation(); e.preventDefault(); }
   else if (e.key === 'ArrowRight'){ vGo(vIdx + 1); e.stopImmediatePropagation(); e.preventDefault(); }
