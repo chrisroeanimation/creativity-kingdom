@@ -693,7 +693,7 @@ function openProject(id){
   if (p.watch) acts += `<a class="plate warm" href="${esc(p.watch)}" target="_blank" rel="noopener">Watch on YouTube</a>`;
   for (const [l,u] of p.links) acts += `<a class="plate" href="${esc(u)}" target="_blank" rel="noopener">${esc(l)}</a>`;
   if (id==='about') acts += `<button class="plate warm" id="pContact">Get in touch</button>`;
-  if (id === 'reel') acts += `<button class="plate" id="rideBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 15.5h17l-1.6-5.5H9.2L7.4 6.5H3.5z"/><circle cx="7.5" cy="18.6" r="1.7"/><circle cx="16.5" cy="18.6" r="1.7"/><path d="M1.5 21.5h21"/></svg>Ride the coaster</button>`;
+  if (id === 'reel') acts += `<button class="plate" id="rideBtn" aria-label="Ride the Showreel Coaster"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 15.5h17l-1.6-5.5H9.2L7.4 6.5H3.5z"/><circle cx="7.5" cy="18.6" r="1.7"/><circle cx="16.5" cy="18.6" r="1.7"/><path d="M1.5 21.5h21"/></svg>Ride</button>`;
   acts += `<button class="plate light" id="nextBtn">Next ride →</button>`;
   $('#pActions').innerHTML = acts;
   if ($('#pContact')) $('#pContact').onclick = () => openVeil('#contact');
