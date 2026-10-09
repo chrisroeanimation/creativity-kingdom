@@ -1385,15 +1385,20 @@ function buildFromGLTF(gltf){
   byRe(/^Coaster(Rail|Ties|Support|Spine)(_\d+)?$/).forEach(o => o.parent && o.parent.remove(o));
   root.updateMatrixWorld(true);
 
-  // A coaster station's roof gets a hole wherever its train climbs out through it (the roof is rebuilt as a clay slab with a rounded slot)
+  // A coaster station's roof gets a hole wherever its train climbs out through it. The roof is two layers (the navy top and the
+  // grey slab under it); each is rebuilt as a rounded clay slab the same size with the same rounded slot cut right through it.
   for (const tr of tracks){
     const st = tr.owner && tr.owner.getObjectByName('Station'); if (!st || !st.isMesh || !st.geometry.attributes.color) continue;
     const g = st.geometry, pos = g.attributes.position, col = g.attributes.color, M = st.matrixWorld, v = new THREE.Vector3();
-    const isRoof = i => col.getZ(i) > .15 && col.getX(i) < .05 && col.getY(i) < .12;   // the roof is the station's navy part
-    const rb = new THREE.Box3(); for (let i = 0; i < pos.count; i++) if (isRoof(i)) rb.expandByPoint(v.fromBufferAttribute(pos, i).applyMatrix4(M));
-    if (rb.isEmpty()) continue;
-    // where the cars, and the ride-along camera above them, pass through the roof slab
-    const P = [], mid = (rb.min.y + rb.max.y) / 2, half = (rb.max.y - rb.min.y) / 2 + .2, dir = new THREE.Vector3();
+    const wy = new Float32Array(pos.count); for (let i = 0; i < pos.count; i++) wy[i] = v.fromBufferAttribute(pos, i).applyMatrix4(M).y;
+    const isTop = i => col.getZ(i) > .15 && col.getX(i) < .05 && col.getY(i) < .12;   // the navy top of the roof
+    const top = new THREE.Box3(); for (let i = 0; i < pos.count; i++) if (isTop(i)) top.expandByPoint(v.fromBufferAttribute(pos, i).applyMatrix4(M));
+    if (top.isEmpty()) continue;
+    const under = i => !isTop(i) && wy[i] > top.min.y - .75;   // the slab directly beneath it
+    const layers = [isTop, under].map(test => { const b = new THREE.Box3(); for (let i = 0; i < pos.count; i++) if (test(i)) b.expandByPoint(v.fromBufferAttribute(pos, i).applyMatrix4(M)); return { test, b }; }).filter(L => !L.b.isEmpty());
+    const rb = layers.reduce((u, L) => u.union(L.b), new THREE.Box3());
+    // where the cars, and the ride-along camera above them, climb out through the top of the roof (the slot then goes down through both layers)
+    const P = [], mid = (top.min.y + top.max.y) / 2, half = (top.max.y - top.min.y) / 2 + .2, dir = new THREE.Vector3();
     for (let i = 0; i < tr.fr.N; i++){ const p = tr.fr.P[i], u = tr.fr.U[i];
       for (let h = .2; h <= .35 + POV_RAISE + .6; h += .2) for (const f of [-.3, POV_FORWARD + .4]){ v.copy(p).addScaledVector(u, h).addScaledVector(tr.fr.T[i], f);
         if (Math.abs(v.y - mid) < half && v.x > rb.min.x && v.x < rb.max.x && v.z > rb.min.z && v.z < rb.max.z){ P.push(v.clone()); dir.add(tr.fr.T[i]); } } }
@@ -1402,27 +1407,29 @@ function buildFromGLTF(gltf){
     let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
     for (const q of P){ const a = q.x * ax + q.z * az, b = q.x * bx + q.z * bz; a0 = Math.min(a0, a); a1 = Math.max(a1, a); b0 = Math.min(b0, b); b1 = Math.max(b1, b); }
     const bc = (b0 + b1) / 2; a0 -= STATION_HOLE_MARGIN; a1 += STATION_HOLE_MARGIN; b0 = bc - STATION_HOLE_HALF; b1 = bc + STATION_HOLE_HALF;
-    // take the old roof out of the station…
-    const idx = g.index ? Array.from(g.index.array) : Array.from({ length:pos.count }, (_, i) => i), keep = [];
-    for (let t = 0; t < idx.length; t += 3) if (!(isRoof(idx[t]) && isRoof(idx[t + 1]) && isRoof(idx[t + 2]))) keep.push(idx[t], idx[t + 1], idx[t + 2]);
-    g.setIndex(keep);
-    // …and put back a rounded clay slab the same size, with the slot cut through it (shape x = world x, shape y = -world z)
     const rr = (path, x0, y0, x1, y1, r) => { const pts = [[x1 - r, y0, x1, y0, x1, y0 + r], [x1, y1 - r, x1, y1, x1 - r, y1], [x0 + r, y1, x0, y1, x0, y1 - r], [x0, y0 + r, x0, y0, x0 + r, y0]];
       path.moveTo(pts[0][0], pts[0][1]); for (const c of pts){ path.lineTo(c[0], c[1]); path.quadraticCurveTo(c[2], c[3], c[4], c[5]); } path.closePath(); return path; };
-    const sh = rr(new THREE.Shape(), rb.min.x, -rb.max.z, rb.max.x, -rb.min.z, .45);
-    const hole = new THREE.Path(), corners = [[a0, b0], [a1, b0], [a1, b1], [a0, b1]].map(([a, b]) => [a * ax + b * bx, -(a * az + b * bz)]), R = .7;
-    for (let k = 0; k < 4; k++){ const c = corners[k], pr = corners[(k + 3) % 4], nx = corners[(k + 1) % 4];
-      const toP = [pr[0] - c[0], pr[1] - c[1]], toN = [nx[0] - c[0], nx[1] - c[1]], lp = Math.hypot(...toP), ln = Math.hypot(...toN);
-      const s0 = [c[0] + toP[0] / lp * R, c[1] + toP[1] / lp * R], s1 = [c[0] + toN[0] / ln * R, c[1] + toN[1] / ln * R];
-      if (k === 0) hole.moveTo(...s0); else hole.lineTo(...s0); hole.quadraticCurveTo(c[0], c[1], ...s1); }
-    hole.closePath(); sh.holes.push(hole);
-    const th = rb.max.y - rb.min.y, bev = Math.min(.14, th * .4);
-    const rg = new THREE.ExtrudeGeometry(sh, { depth:Math.max(.02, th - bev * 2), bevelEnabled:true, bevelThickness:bev, bevelSize:bev, bevelOffset:-bev, bevelSegments:3, curveSegments:8 });
-    rg.rotateX(-Math.PI / 2); rg.translate(0, rb.min.y + bev, 0); rg.deleteAttribute('uv');
-    let ci = 0; for (let i = 0; i < pos.count; i++) if (isRoof(i)){ ci = i; break; }
-    const n = rg.attributes.position.count, ca = new Float32Array(n * 4); for (let i = 0; i < n; i++){ ca[i * 4] = col.getX(ci); ca[i * 4 + 1] = col.getY(ci); ca[i * 4 + 2] = col.getZ(ci); ca[i * 4 + 3] = col.itemSize > 3 ? col.getW(ci) : 1; }
-    rg.setAttribute('color', new THREE.BufferAttribute(ca, 4));
-    const roof = new THREE.Mesh(clayGeo(toCreasedNormals(rg, 1.0)), clayMat); roof.castShadow = roof.receiveShadow = true; scene.add(roof);
+    const slot = () => { const hole = new THREE.Path(), corners = [[a0, b0], [a1, b0], [a1, b1], [a0, b1]].map(([a, b]) => [a * ax + b * bx, -(a * az + b * bz)]), R = .7;
+      for (let k = 0; k < 4; k++){ const c = corners[k], pr = corners[(k + 3) % 4], nx = corners[(k + 1) % 4];
+        const toP = [pr[0] - c[0], pr[1] - c[1]], toN = [nx[0] - c[0], nx[1] - c[1]], lp = Math.hypot(...toP), ln = Math.hypot(...toN);
+        const s0 = [c[0] + toP[0] / lp * R, c[1] + toP[1] / lp * R], s1 = [c[0] + toN[0] / ln * R, c[1] + toN[1] / ln * R];
+        if (k === 0) hole.moveTo(...s0); else hole.lineTo(...s0); hole.quadraticCurveTo(c[0], c[1], ...s1); }
+      hole.closePath(); return hole; };
+    // take the old roof layers out of the station…
+    const idx = g.index ? Array.from(g.index.array) : Array.from({ length:pos.count }, (_, i) => i), keep = [];
+    const inRoof = i => layers.some(L => L.test(i));
+    for (let t = 0; t < idx.length; t += 3) if (!(inRoof(idx[t]) && inRoof(idx[t + 1]) && inRoof(idx[t + 2]))) keep.push(idx[t], idx[t + 1], idx[t + 2]);
+    g.setIndex(keep);
+    // …and put each back as a rounded clay slab the same size, with the slot cut through it (shape x = world x, shape y = -world z)
+    for (const L of layers){ const lb = L.b;
+      const sh = rr(new THREE.Shape(), lb.min.x, -lb.max.z, lb.max.x, -lb.min.z, .45); sh.holes.push(slot());
+      const th = lb.max.y - lb.min.y, bev = Math.min(.14, th * .4);
+      const rg = new THREE.ExtrudeGeometry(sh, { depth:Math.max(.02, th - bev * 2), bevelEnabled:true, bevelThickness:bev, bevelSize:bev, bevelOffset:-bev, bevelSegments:3, curveSegments:8 });
+      rg.rotateX(-Math.PI / 2); rg.translate(0, lb.min.y + bev, 0); rg.deleteAttribute('uv');
+      let ci = 0; for (let i = 0; i < pos.count; i++) if (L.test(i)){ ci = i; break; }
+      const n = rg.attributes.position.count, ca = new Float32Array(n * 4); for (let i = 0; i < n; i++){ ca[i * 4] = col.getX(ci); ca[i * 4 + 1] = col.getY(ci); ca[i * 4 + 2] = col.getZ(ci); ca[i * 4 + 3] = col.itemSize > 3 ? col.getW(ci) : 1; }
+      rg.setAttribute('color', new THREE.BufferAttribute(ca, 4));
+      const roof = new THREE.Mesh(clayGeo(toCreasedNormals(rg, 1.0)), clayMat); roof.castShadow = roof.receiveShadow = true; scene.add(roof); }
   }
 
   // Pads → project zones (measured before their clay joins the batch)
