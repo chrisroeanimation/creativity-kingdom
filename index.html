@@ -1361,8 +1361,10 @@ function buildFromGLTF(gltf){
   byRe(/^CoasterPath/).forEach(path => {
     const kids = path.children.slice().sort(numeric);
     if (kids.length < 4) return;
-    const pts = kids.map(o => o.getWorldPosition(new THREE.Vector3()));
-    const rolls = kids.map(o => rollOf(o.quaternion));
+    let pts = kids.map(o => o.getWorldPosition(new THREE.Vector3()));
+    let rolls = kids.map(o => rollOf(o.quaternion));
+    let names = kids.map(o => o.name);
+    if (SHOWREEL_CORKSCREW && /CoasterPath_Red/.test(path.name) && kids.length === 71) ({ pts, rolls, names } = showreelCorkscrew(pts, rolls, names));
     const fr = coasterFrames(THREE, pts, rolls, 6);
     const owner0 = path.parent, style = { ...coasterStyle(path.name) };
     // keep whatever colours the track was painted in Unity (read from the exported track meshes)
@@ -1375,7 +1377,7 @@ function buildFromGLTF(gltf){
     owner.children.filter(o => /^Coaster(Rail|Ties|Support|Spine)/.test(o.name)).forEach(o => owner.remove(o));
     const cars = owner.children.filter(o => /^CoasterCar_\d+/.test(o.name)).sort(numeric);
     // samples that follow a point named …_Lift are on the chain lift
-    const liftPt = kids.map(o => /_Lift/i.test(o.name)), lift = fr.K ? fr.K.map(k => liftPt[Math.floor(k) % kids.length] ? 1 : 0) : fr.P.map(() => 0);
+    const liftPt = names.map(n => /_Lift/i.test(n)), lift = fr.K ? fr.K.map(k => liftPt[Math.floor(k) % names.length] ? 1 : 0) : fr.P.map(() => 0);
     // barrel rolls (where the track twists hard about itself) are taken slowly (the Showreel Coaster; the hanging Chaos Castle train keeps its pace): 1 = in a roll, 0 = not, eased in and out over a few metres
     const twist = fr.P.map((_, i) => { const j = (i + 1) % fr.N, u = fr.U[j].clone().addScaledVector(fr.T[i], -fr.U[j].dot(fr.T[i])).normalize(); return Math.acos(THREE.MathUtils.clamp(u.dot(fr.U[i]), -1, 1)) / (fr.length / fr.N); });
     const ramp = Math.max(1, Math.round(ROLL_EASE / (fr.length / fr.N))), hard = twist.map(t => t > ROLL_TWIST ? 1 : 0);
@@ -1618,6 +1620,63 @@ const ROLL_SLOW = .45;    // speed through a barrel roll (× normal)
 const ROLL_TWIST = .25;   // how hard the track must twist (radians per metre) to count as a roll
 const ROLL_EASE = 7;      // metres to slow down before a roll and speed back up after it
 const STATION_HOLE_MARGIN = 1, STATION_HOLE_HALF = 1.9;   // the slot in a station roof where the train climbs out: extra length each end, half-width
+// The Showreel Coaster's finale: after the first loop, the old barrel roll and second loop are replaced by one long, smooth
+// anticlockwise corkscrew over a hill (a heartline roll: the train turns around the riders' middle, not the rails, so it feels like a
+// gentle twist rather than a jolt), which flows straight into the banked turn home. The lift hill, first drop and first loop
+// are untouched.
+const SHOWREEL_CORKSCREW = true;
+const CORKSCREW = { start:-43, rail:3.2, hill:4.2, heart:1.1, points:26, join:65 };   // x where it starts, rail height there, hill height, heartline height, points, and which old point it flows into
+// Leaving the first loop the train keeps rolling the same way (anticlockwise) over a long hill, a full turn and a bit,
+// and arrives already leaning into the final banked turn, so the corkscrew and the turn are one continuous movement.
+function showreelCorkscrew(pts, rolls, names){
+  const C = CORKSCREW, keepA = 42, J = C.join;   // keep points 0–42 (lift, drop, turnaround, first loop) and J onwards (the rest of the banked turn home)
+  const P = pts.slice(0, keepA + 1), R = rolls.slice(0, keepA + 1), N = names.slice(0, keepA + 1);
+  const up = new THREE.Vector3(0, 1, 0);
+  // the end: exactly where the turn's own point J is, leaning at its bank, heading the way the turn heads
+  const endRail = pts[J].clone(), endT = pts[J + 1].clone().sub(pts[J - 1]).normalize(), endRoll = rolls[J];
+  const endUp = up.clone().addScaledVector(endT, -endT.y).normalize().applyAxisAngle(endT, endRoll);
+  const H0 = new THREE.Vector3(C.start, C.rail + C.heart, pts[keepA].z), H1 = endRail.clone().addScaledVector(endUp, C.heart);
+  const L = H0.distanceTo(H1) * 1.15, T0 = new THREE.Vector3(1, 0, 0).multiplyScalar(L), T1 = endT.clone().multiplyScalar(L);
+  const total = -(Math.PI * 2 - endRoll);   // anticlockwise all the way round, finishing at the turn's bank
+  for (let k = 0; k < C.points; k++){
+    const t = k / C.points, t2 = t * t, t3 = t2 * t;
+    // the heartline: a smooth curve from the loop exit to the turn, lifted over a hill
+    const hp = H0.clone().multiplyScalar(2 * t3 - 3 * t2 + 1).addScaledVector(T0, t3 - 2 * t2 + t).addScaledVector(H1, -2 * t3 + 3 * t2).addScaledVector(T1, t3 - t2);
+    hp.y += C.hill * Math.sin(Math.PI * t) ** 2;
+    const d = H0.clone().multiplyScalar(6 * t2 - 6 * t).addScaledVector(T0, 3 * t2 - 4 * t + 1).addScaledVector(H1, -6 * t2 + 6 * t).addScaledVector(T1, 3 * t2 - 2 * t);
+    d.y += C.hill * Math.PI * Math.sin(2 * Math.PI * t); const fwd = d.normalize();
+    // the roll eases in from level and eases out into the turn's bank
+    const phi = total * (t - Math.sin(Math.PI * 2 * t) / (Math.PI * 2));
+    const u = up.clone().addScaledVector(fwd, -fwd.dot(up)).normalize().applyAxisAngle(fwd, phi);
+    P.push(hp.addScaledVector(u, -C.heart)); R.push(phi); N.push('Corkscrew_' + k); }
+  for (let i = J; i < pts.length; i++){ P.push(pts[i]); R.push(rolls[i]); N.push(names[i]); }
+  // Second pass: the track's natural lean (from its loops and turns) is measured with no roll added, then the roll is chosen so
+  // the lean the riders feel carries on in the same direction they're already leaning as they leave the loop, a full turn
+  // round, and lands exactly on the final turn's bank.
+  const a0 = keepA + 1, a1 = a0 + C.points;   // the corkscrew's points
+  // First, the kept track (lift hill, first loop, final turn) must lean exactly as it always did: changing the track's shape
+  // changes the small twist the maths spreads around the whole circuit, so measure it and take it back out at every kept point.
+  const nearest = (f, i) => { let bi = 0; for (let j = 0; j < f.N; j++) if (Math.abs(f.K[j] - i) < Math.abs(f.K[bi] - i)) bi = j; return bi; };
+  { const fo = coasterFrames(THREE, pts, rolls, 6), Rz = R.slice(); for (let i = a0; i < a1; i++) Rz[i] = 0; const fn = coasterFrames(THREE, P, Rz, 6), c = new THREE.Vector3();
+    const fix = (iNew, iOld) => { const a = nearest(fn, iNew), b = nearest(fo, iOld), un = fn.U[a], uo = fo.U[b]; return Math.atan2(c.crossVectors(un, uo).dot(fn.T[a]), un.dot(uo)); };
+    for (let i = 0; i <= keepA; i++) R[i] += fix(i, i);
+    for (let i = a1; i < P.length; i++) R[i] += fix(i, J + i - a1); }
+  const R0 = R.slice(); for (let i = a0; i < a1; i++) R0[i] = 0;
+  const fr = coasterFrames(THREE, P, R0, 6), flat = new THREE.Vector3(), right = new THREE.Vector3();
+  const leanAt = i => { let bi = 0; for (let j = 0; j < fr.N; j++) if (Math.abs(fr.K[j] - i) < Math.abs(fr.K[bi] - i)) bi = j;
+    const T = fr.T[bi], U = fr.U[bi]; flat.set(0, 1, 0).addScaledVector(T, -T.y).normalize(); right.crossVectors(T, flat); return Math.atan2(U.dot(right), U.dot(flat)); };
+  const base = []; for (let i = keepA; i <= a1; i++) base.push(leanAt(i));
+  const unwrapTo = (a, ref) => { while (a - ref > Math.PI) a -= Math.PI * 2; while (a - ref < -Math.PI) a += Math.PI * 2; return a; };
+  for (let i = 1; i < base.length; i++) base[i] = unwrapTo(base[i], base[i - 1]);
+  const start = base[0], dirn = Math.sign(start) || -1;   // the lean as the train leaves the loop (its roll is already included)
+  const rawEnd = base[base.length - 1];   // the turn's own lean where the corkscrew joins it (its bank is already included)
+  let end = unwrapTo(rawEnd, start); while (dirn * (end - start) < Math.PI * 1.5) end += dirn * Math.PI * 2;
+  for (let k = 0; k < C.points; k++){ const t = (k + 1) / (C.points + 1), want = start + (end - start) * (t - Math.sin(Math.PI * 2 * t) / (Math.PI * 2));
+    R[a0 + k] = want - base[k + 1]; }
+  // keep the rest of the turn's rolls continuous with where the corkscrew ends
+  const shift = end - rawEnd; for (let i = a1; i < R.length; i++) R[i] += shift;   // whole turns only, so the turn itself looks the same
+  return { pts:P, rolls:R, names:N };
+}
 const pose = { pos:new THREE.Vector3(), fwd:new THREE.Vector3(), up:new THREE.Vector3() };
 const basis = new THREE.Matrix4(), xAxis = new THREE.Vector3();
 function stepTrains(dt){

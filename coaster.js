@@ -36,7 +36,7 @@ export function coasterFrames(THREE, points, rolls, samplesPerSeg = 8){
     if (roll) U[i].applyAxisAngle(T[i], roll);
   }
   let length = 0; for (let i = 0; i < N; i++) length += P[i].distanceTo(P[(i + 1) % N]);
-  return { P, T, U, N, length };
+  return { P, T, U, N, length, K:TT.map(t => t * n) };   // K: which authored point each sample follows (point index + fraction)
 }
 
 // Position + orientation on the track at arc fraction s (0..1). Car forward = +Z, up = +Y.
