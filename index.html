@@ -389,6 +389,7 @@ body.pov :is(.hud,#prompt,#hint,#joy,#toast){display:none!important}
     <h1 id="introTitle"><span class="kicker">Chris Roe's</span><img class="biglogo" src="img/kingdom-logo.webp" alt="Creativity Kingdom" width="1200" height="572"></h1>
     <div class="actions">
       <button class="plate warm cta" id="enterBtn" disabled><span id="enterLabel">Sculpting the park…</span><svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button>
+      <button class="plate" id="linkBtn" hidden disabled></button>
       <button class="plate light" id="skipBtn">See all work</button>
     </div>
     <p class="lede"><strong>Every ride in the park is one of my projects.</strong></p>
@@ -725,7 +726,10 @@ $('#skipBtn').onclick = () => { $('#intro').hidden = true; openVeil('#work'); st
 const LINK_OPENS = { showreel:{ id:'reel', label:'Watch the showreel' } };
 const linkOpen = LINK_OPENS[window.__linkTag] || null;
 let openAfterCine = null;
-$('#enterBtn').onclick = () => { $('#intro').hidden = true; uiOpen=false; canvas.focus(); if (linkOpen) openAfterCine = linkOpen.id; startIntro(); startCine(); };
+function enterPark(openId = null){ $('#intro').hidden = true; uiOpen=false; canvas.focus(); openAfterCine = openId; startIntro(); startCine(); }
+$('#enterBtn').onclick = () => enterPark();
+// arriving from a link like /showreel adds a second button that enters the park and then opens that ride
+if (linkOpen){ const lb = $('#linkBtn'); lb.textContent = linkOpen.label; lb.hidden = false; lb.onclick = () => enterPark(linkOpen.id); }
 // background music: starts when the visitor enters (browsers need a click first); the note button mutes it
 // Background music. Played through Web Audio so the loop is sample-accurate (an <audio> loop leaves a
 // small gap from the MP3's padding); the <audio> element is only a fallback for old browsers.
@@ -2267,7 +2271,7 @@ function frame(){
   resetPlayer();
   requestAnimationFrame(frame);
   window.__park = { scene, renderer, pl, colliders };
-  const b = $('#enterBtn'); b.disabled = false; $('#enterLabel').textContent = linkOpen ? linkOpen.label : 'Enter the park';
+  const b = $('#enterBtn'); b.disabled = false; $('#enterLabel').textContent = 'Enter the park'; $('#linkBtn').disabled = false;
   // focused so Enter/Space starts, but without a focus ring until someone actually tabs
   b.classList.add('quiet'); b.focus({ focusVisible:false }); addEventListener('keydown', e => { if (e.key === 'Tab') b.classList.remove('quiet'); }, { once:true });
 })();
