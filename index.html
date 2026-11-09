@@ -727,9 +727,9 @@ const LINK_OPENS = { showreel:{ id:'reel', label:'Watch the showreel' } };
 const linkOpen = LINK_OPENS[window.__linkTag] || null;
 let openAfterCine = null;
 function enterPark(openId = null){ $('#intro').hidden = true; uiOpen=false; canvas.focus(); openAfterCine = openId; startIntro(); startCine(); }
-$('#enterBtn').onclick = () => enterPark();
-// arriving from a link like /showreel adds a second button that enters the park and then opens that ride
-if (linkOpen){ const lb = $('#linkBtn'); lb.textContent = linkOpen.label; lb.hidden = false; lb.onclick = () => enterPark(linkOpen.id); }
+// arriving from a link like /showreel: the big button enters the park and then opens that ride, and a smaller one just enters
+$('#enterBtn').onclick = () => enterPark(linkOpen ? linkOpen.id : null);
+if (linkOpen){ const lb = $('#linkBtn'); lb.textContent = 'Enter the park'; lb.hidden = false; lb.onclick = () => enterPark(); }
 // background music: starts when the visitor enters (browsers need a click first); the note button mutes it
 // Background music. Played through Web Audio so the loop is sample-accurate (an <audio> loop leaves a
 // small gap from the MP3's padding); the <audio> element is only a fallback for old browsers.
@@ -2271,7 +2271,7 @@ function frame(){
   resetPlayer();
   requestAnimationFrame(frame);
   window.__park = { scene, renderer, pl, colliders };
-  const b = $('#enterBtn'); b.disabled = false; $('#enterLabel').textContent = 'Enter the park'; $('#linkBtn').disabled = false;
+  const b = $('#enterBtn'); b.disabled = false; $('#enterLabel').textContent = linkOpen ? linkOpen.label : 'Enter the park'; $('#linkBtn').disabled = false;
   // focused so Enter/Space starts, but without a focus ring until someone actually tabs
   b.classList.add('quiet'); b.focus({ focusVisible:false }); addEventListener('keydown', e => { if (e.key === 'Tab') b.classList.remove('quiet'); }, { once:true });
 })();
