@@ -13,6 +13,7 @@
      the visit is then counted as "/portfolio", so you can tell which link someone used. -->
 <script>
 (function(){
+  window.__linkTag = location.hash.slice(1).toLowerCase();   // e.g. 'showreel': the park opens on that ride (see LINK_OPENS)
   if (!/(^|\.)chrisroeanimation\.com$|\.github\.io$/.test(location.hostname)) return;
   var tag = location.hash.slice(1), path = location.pathname;
   if (/^[a-z0-9-]{2,40}$/i.test(tag) && tag !== 'debug' && tag !== 'toggle-goatcounter'){ path = '/' + tag.toLowerCase(); history.replaceState(null, '', location.pathname + location.search); }
@@ -720,7 +721,11 @@ $('#workBtn').onclick = () => openVeil('#work');
 $('#mapBtn').onclick = () => openVeil('#map');
 $('#contactBtn').onclick = () => openVeil('#contact');
 $('#skipBtn').onclick = () => { $('#intro').hidden = true; openVeil('#work'); startMusic(); };
-$('#enterBtn').onclick = () => { $('#intro').hidden = true; uiOpen=false; canvas.focus(); startIntro(); startCine(); };
+// A link like chrisroeanimation.com/showreel enters the park as usual, then opens that ride's panel once the camera lands.
+const LINK_OPENS = { showreel:{ id:'reel', label:'Watch the showreel' } };
+const linkOpen = LINK_OPENS[window.__linkTag] || null;
+let openAfterCine = null;
+$('#enterBtn').onclick = () => { $('#intro').hidden = true; uiOpen=false; canvas.focus(); if (linkOpen) openAfterCine = linkOpen.id; startIntro(); startCine(); };
 // background music: starts when the visitor enters (browsers need a click first); the note button mutes it
 // Background music. Played through Web Audio so the loop is sample-accurate (an <audio> loop leaves a
 // small gap from the MP3's padding); the <audio> element is only a fallback for old browsers.
@@ -2003,7 +2008,7 @@ const CINE_BACK = 12;   // the opening shot starts this many metres further back
 const CINE_HOLD = 0.8, CINE_RISE = 2.0;   // hold close for 0.8 s, then rise: most of the move in ~1.6 s, the last ~0.4 s a slow settle
 let cine = null;
 function startCine(){ if (reduceMotion){ endCine(); return; } cine = { t:0, w0:performance.now() }; document.body.classList.add('cine'); snapCam = true; }
-function endCine(){ cine = null; document.body.classList.remove('cine'); }
+function endCine(){ cine = null; document.body.classList.remove('cine'); if (openAfterCine){ const id = openAfterCine; openAfterCine = null; openProject(id); } }
 const camGuestOff = new THREE.Vector3(), camGuestLook = new THREE.Vector3();
 let zoom = isTouch ? 1.45 : 1.35, zoomS = zoom;   // zoom = target, zoomS = eased value the camera uses
 canvas.addEventListener('wheel', e => { e.preventDefault(); zoom = THREE.MathUtils.clamp(zoom * (1 + THREE.MathUtils.clamp(e.deltaY, -120, 120) * .0012), ZOOM_MIN, ZOOM_MAX); }, { passive:false });
@@ -2262,7 +2267,7 @@ function frame(){
   resetPlayer();
   requestAnimationFrame(frame);
   window.__park = { scene, renderer, pl, colliders };
-  const b = $('#enterBtn'); b.disabled = false; $('#enterLabel').textContent = 'Enter the park';
+  const b = $('#enterBtn'); b.disabled = false; $('#enterLabel').textContent = linkOpen ? linkOpen.label : 'Enter the park';
   // focused so Enter/Space starts, but without a focus ring until someone actually tabs
   b.classList.add('quiet'); b.focus({ focusVisible:false }); addEventListener('keydown', e => { if (e.key === 'Tab') b.classList.remove('quiet'); }, { once:true });
 })();
