@@ -147,6 +147,7 @@ a{color:var(--navy)}
 #gate .vbox{position:relative}
 #gSound{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);gap:10px;font-size:18px;min-height:52px;padding:0 22px}
 #gSound svg{width:22px;height:22px}
+#gSound:not(.light) .off,#gSound.light .on{display:none}
 #gate .actions{justify-content:center}
 #gate .go{width:.95em;height:.95em}
 @media (max-height:700px){#gate .card{gap:10px;padding-top:16px;padding-bottom:18px}#gate h2{font-size:34px;padding-top:6px}}
@@ -413,7 +414,7 @@ body.pov :is(.hud,#prompt,#hint,#joy,#toast){display:none!important}
     <div class="role" id="gRole"></div>
     <div class="vbox">
       <video id="gVid" controls playsinline preload="auto"></video>
-      <button class="plate warm" id="gSound" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>Tap for sound</button>
+      <button class="plate warm" id="gSound" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="on" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/><path class="off" d="M16 9l6 6M22 9l-6 6"/></svg><span id="gSoundLabel">Tap for sound</span></button>
     </div>
     <div class="actions"><button class="plate" id="gEnter"><span id="gEnterLabel">Enter the park</span><svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button></div>
   </div>
@@ -770,9 +771,11 @@ if (linkPlay){
   $('#gRole').innerHTML = `${esc(L.role)}<span>${esc(L.sub)}</span>`;
   v.poster = L.poster; v.src = L.src;
   // try with sound; browsers only allow that after a click, so otherwise play muted with a "Tap for sound" button
-  const showSnd = () => { snd.hidden = !(v.muted || v.volume === 0); };
-  v.play().catch(() => { v.muted = true; showSnd(); return v.play(); }).catch(() => { v.muted = false; snd.hidden = true; });   // no autoplay at all: the normal play button
-  snd.onclick = () => { v.muted = false; v.volume = 1; snd.hidden = true; if (v.paused) v.play().catch(() => {});
+  // the button stays up and switches between "Tap for sound" and "Tap for no sound"
+  const showSnd = () => { const off = v.muted || v.volume === 0; snd.classList.toggle('warm', off); snd.classList.toggle('light', !off); $('#gSoundLabel').textContent = off ? 'Tap for sound' : 'Tap for no sound'; };
+  v.play().then(() => { snd.hidden = false; showSnd(); }, () => { v.muted = true; snd.hidden = false; showSnd(); return v.play(); }).catch(() => { v.muted = false; snd.hidden = true; });   // no autoplay at all: the normal play button
+  snd.onclick = () => { if (!(v.muted || v.volume === 0)){ v.muted = true; return; }
+    v.muted = false; if (v.volume === 0) v.volume = 1; if (v.paused) v.play().catch(() => {});
     const AC = window.AudioContext || window.webkitAudioContext; if (AC && !actx) actx = new AC(); actx && actx.resume().catch(() => {}); };   // unlock the park's audio in the same click
   v.addEventListener('volumechange', showSnd);
   v.addEventListener('ended', leaveGate);
@@ -799,6 +802,7 @@ async function musicReady(){
   } catch (e){ mFallback = true; }
 }
 async function playMusic(at = 0, fade = 0.5){   // at: audio-clock time to start (0 = now); fade: seconds to ease in
+  if (!$('#gate').hidden) return;   // a reel link's video is playing: the park music waits until they enter the park
   // create/resume the audio context inside the click itself (Safari insists), then finish loading
   if (!mFallback){ const AC = window.AudioContext || window.webkitAudioContext; if (AC && !actx) actx = new AC(); if (actx) actx.resume().catch(() => {}); }
   await musicReady();
