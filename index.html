@@ -145,13 +145,15 @@ a{color:var(--navy)}
 /* Reel links (/showreel, /character-animation): the reel plays straight away in a video window, then the park */
 #gate .card{max-width:min(1040px,max(360px,calc((100vh - 400px) * 16 / 9 + 90px)));gap:14px}   /* sized so the whole window, video and all, fits the screen height */
 #gate .vbox{position:relative}
-#gSound{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);gap:10px;font-size:18px;min-height:52px;padding:0 22px}
-#gSound svg{width:22px;height:22px}
-#gSound:not(.light) .off,#gSound.light .on{display:none}
+#gPlay{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:clamp(76px,11vw,112px);height:clamp(76px,11vw,112px);padding:0;border-radius:50%;border-width:4px;box-shadow:0 7px 0 var(--navy-deep)}
+#gPlay svg{width:46%;height:46%;margin-left:8%}
+#gPlay:hover{transform:translate(-50%,-50%) scale(1.06)}
+#gPlay:active{transform:translate(-50%,calc(-50% + 4px));box-shadow:0 2px 0 var(--navy-deep)}
+#gate video:not([controls]){cursor:pointer}
 #gate .actions{justify-content:center}
 #gate .go{width:.95em;height:.95em}
 @media (max-height:700px){#gate .card{gap:10px;padding-top:16px;padding-bottom:18px}#gate h2{font-size:34px;padding-top:6px}}
-@media (max-height:520px){#gate .role{display:none}#gate h2{font-size:26px;-webkit-text-stroke:4px var(--navy-deep);filter:drop-shadow(0 3px 0 var(--navy-deep))}#gSound{bottom:48px}}
+@media (max-height:520px){#gate .role{display:none}#gate h2{font-size:26px;-webkit-text-stroke:4px var(--navy-deep);filter:drop-shadow(0 3px 0 var(--navy-deep))}}
 /* Ride the Showreel Coaster: a point-of-view lap with the park UI hidden */
 #povFade{position:fixed;inset:0;z-index:70;background:#0b0f2e;opacity:0;pointer-events:none;transition:opacity .4s}
 #povFade.on{opacity:1}
@@ -413,8 +415,8 @@ body.pov :is(.hud,#prompt,#hint,#joy,#toast){display:none!important}
     <h2 id="gTitle"></h2>
     <div class="role" id="gRole"></div>
     <div class="vbox">
-      <video id="gVid" controls playsinline preload="auto"></video>
-      <button class="plate warm" id="gSound" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="on" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/><path class="off" d="M16 9l6 6M22 9l-6 6"/></svg><span id="gSoundLabel">Tap for sound</span></button>
+      <video id="gVid" playsinline preload="auto"></video>
+      <button class="plate warm" id="gPlay" aria-label="Play the reel"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg></button>
     </div>
     <div class="actions"><button class="plate" id="gEnter"><span id="gEnterLabel">Enter the park</span><svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button></div>
   </div>
@@ -765,19 +767,17 @@ function leaveGate(){
   else { $('#intro').hidden = false; enterWhenReady = true; }   // still loading: show the start screen's progress, then go straight in
 }
 if (linkPlay){
-  const L = linkPlay, v = $('#gVid'), snd = $('#gSound');
+  const L = linkPlay, v = $('#gVid');
   $('#intro').hidden = true; $('#gate').hidden = false;
   $('#gTitle').textContent = L.title;
   $('#gRole').innerHTML = `${esc(L.role)}<span>${esc(L.sub)}</span>`;
   v.poster = L.poster; v.src = L.src;
-  // try with sound; browsers only allow that after a click, so otherwise play muted with a "Tap for sound" button
-  // the button stays up and switches between "Tap for sound" and "Tap for no sound"
-  const showSnd = () => { const off = v.muted || v.volume === 0; snd.classList.toggle('warm', off); snd.classList.toggle('light', !off); $('#gSoundLabel').textContent = off ? 'Tap for sound' : 'Tap for no sound'; };
-  v.play().then(() => { snd.hidden = false; showSnd(); }, () => { v.muted = true; snd.hidden = false; showSnd(); return v.play(); }).catch(() => { v.muted = false; snd.hidden = true; });   // no autoplay at all: the normal play button
-  snd.onclick = () => { if (!(v.muted || v.volume === 0)){ v.muted = true; return; }
-    v.muted = false; if (v.volume === 0) v.volume = 1; if (v.paused) v.play().catch(() => {});
-    const AC = window.AudioContext || window.webkitAudioContext; if (AC && !actx) actx = new AC(); actx && actx.resume().catch(() => {}); };   // unlock the park's audio in the same click
-  v.addEventListener('volumechange', showSnd);
+  // a big play button (the same in every browser): the click lets the reel play with sound, and unlocks the park's sound for afterwards
+  const play = () => { $('#gPlay').hidden = true; v.controls = true; v.play().catch(() => {});
+    const AC = window.AudioContext || window.webkitAudioContext; if (AC && !actx) actx = new AC(); if (actx) actx.resume().catch(() => {}); };
+  $('#gPlay').onclick = play;
+  v.addEventListener('click', () => { if (!v.controls) play(); });
+  v.addEventListener('play', () => { $('#gPlay').hidden = true; v.controls = true; });
   v.addEventListener('ended', leaveGate);
   $('#gClose').onclick = $('#gEnter').onclick = leaveGate;
   addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#gate').hidden){ e.preventDefault(); e.stopImmediatePropagation(); leaveGate(); } }, true);
