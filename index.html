@@ -142,6 +142,15 @@ a{color:var(--navy)}
 .quotes blockquote p{margin:0;font-family:var(--display);font-size:19px;line-height:1.2;color:var(--navy)}
 .quotes cite{font-style:normal;font-family:var(--body);font-weight:700;font-size:13px;color:var(--muted);letter-spacing:.02em}
 /* Picture viewer: click a project picture to see it large; swipe, arrow keys or the arrow buttons move between pictures */
+/* Reel links (/showreel, /character-animation): the reel plays straight away in a video window, then the park */
+#gate .card{max-width:min(1040px,max(360px,calc((100vh - 400px) * 16 / 9 + 90px)));gap:14px}   /* sized so the whole window, video and all, fits the screen height */
+#gate .vbox{position:relative}
+#gSound{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);gap:10px;font-size:18px;min-height:52px;padding:0 22px}
+#gSound svg{width:22px;height:22px}
+#gate .actions{justify-content:center}
+#gate .go{width:.95em;height:.95em}
+@media (max-height:700px){#gate .card{gap:10px;padding-top:16px;padding-bottom:18px}#gate h2{font-size:34px;padding-top:6px}}
+@media (max-height:520px){#gate .role{display:none}#gate h2{font-size:26px;-webkit-text-stroke:4px var(--navy-deep);filter:drop-shadow(0 3px 0 var(--navy-deep))}#gSound{bottom:48px}}
 /* Ride the Showreel Coaster: a point-of-view lap with the park UI hidden */
 #povFade{position:fixed;inset:0;z-index:70;background:#0b0f2e;opacity:0;pointer-events:none;transition:opacity .4s}
 #povFade.on{opacity:1}
@@ -389,12 +398,24 @@ body.pov :is(.hud,#prompt,#hint,#joy,#toast){display:none!important}
     <h1 id="introTitle"><span class="kicker">Chris Roe's</span><img class="biglogo" src="img/kingdom-logo.webp" alt="Creativity Kingdom" width="1200" height="572"></h1>
     <div class="actions">
       <button class="plate warm cta" id="enterBtn" disabled><span id="enterLabel">Sculpting the park…</span><svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button>
-      <button class="plate" id="linkBtn" hidden disabled></button>
       <button class="plate light" id="skipBtn">See all work</button>
     </div>
     <p class="lede"><strong>Every ride in the park is one of my projects.</strong></p>
     <p class="lede" id="introLede">I design original worlds, find ways to build them, and lead the teams that bring them to life. For over 20 years I've combined physical sets, puppets and handmade materials with CG and real-time production across games, TV and film.</p>
     <div class="keys"><span><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk</span><span><kbd>E</kbd> open a ride</span><span>Scroll to zoom · music on</span></div>
+  </div>
+</div>
+
+<div class="veil intro" id="gate" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="gTitle">
+    <button class="plate close" id="gClose" aria-label="Close the video and enter the park"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    <h2 id="gTitle"></h2>
+    <div class="role" id="gRole"></div>
+    <div class="vbox">
+      <video id="gVid" controls playsinline preload="auto"></video>
+      <button class="plate warm" id="gSound" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>Tap for sound</button>
+    </div>
+    <div class="actions"><button class="plate" id="gEnter"><span id="gEnterLabel">Enter the park</span><svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button></div>
   </div>
 </div>
 
@@ -722,14 +743,42 @@ $('#workBtn').onclick = () => openVeil('#work');
 $('#mapBtn').onclick = () => openVeil('#map');
 $('#contactBtn').onclick = () => openVeil('#contact');
 $('#skipBtn').onclick = () => { $('#intro').hidden = true; openVeil('#work'); startMusic(); };
-// A link like chrisroeanimation.com/showreel enters the park as usual, then opens that ride's panel once the camera lands.
-const LINK_OPENS = { showreel:{ id:'reel', label:'Watch the showreel' } };
-const linkOpen = LINK_OPENS[window.__linkTag] || null;
-let openAfterCine = null;
-function enterPark(openId = null){ $('#intro').hidden = true; uiOpen=false; canvas.focus(); openAfterCine = openId; startIntro(); startCine(); }
-// arriving from a link like /showreel: the big button enters the park and then opens that ride, and a smaller one just enters
-$('#enterBtn').onclick = () => enterPark(linkOpen ? linkOpen.id : null);
-if (linkOpen){ const lb = $('#linkBtn'); lb.textContent = 'Enter the park'; lb.hidden = false; lb.onclick = () => enterPark(); }
+// Reel links: chrisroeanimation.com/showreel and /character-animation skip the start screen and play that reel straight
+// away in a video window (the park keeps loading behind it). When the reel ends, or is closed, the visitor goes into the park.
+const LINK_PLAYS = {
+  showreel:{ title:'Showreel', role:'Chris Roe', sub:'Creative, Art & Animation Director', src:'media/reel/video.mp4', poster:'media/reel/poster.jpg' },
+  'character-animation':{ title:'Character Animation', role:'Chris Roe', sub:'Character animation · Magic Maia', src:'media/reel/video2.mp4', poster:'media/reel/poster2.jpg' },
+};
+const linkPlay = LINK_PLAYS[window.__linkTag] || null;
+let parkReady = false, enterWhenReady = false;
+function enterPark(){ $('#intro').hidden = true; uiOpen=false; canvas.focus(); startIntro(); startCine(); }
+$('#enterBtn').onclick = () => enterPark();
+function leaveGate(){
+  if ($('#gate').hidden) return;
+  const v = $('#gVid'); v.pause();
+  const fs = document.fullscreenElement || document.webkitFullscreenElement;
+  if (fs) (document.exitFullscreen || document.webkitExitFullscreen).call(document)?.catch?.(() => {});
+  else if (v.webkitDisplayingFullscreen && v.webkitExitFullscreen) v.webkitExitFullscreen();
+  $('#gate').hidden = true;
+  if (parkReady) enterPark();
+  else { $('#intro').hidden = false; enterWhenReady = true; }   // still loading: show the start screen's progress, then go straight in
+}
+if (linkPlay){
+  const L = linkPlay, v = $('#gVid'), snd = $('#gSound');
+  $('#intro').hidden = true; $('#gate').hidden = false;
+  $('#gTitle').textContent = L.title;
+  $('#gRole').innerHTML = `${esc(L.role)}<span>${esc(L.sub)}</span>`;
+  v.poster = L.poster; v.src = L.src;
+  // try with sound; browsers only allow that after a click, so otherwise play muted with a "Tap for sound" button
+  const showSnd = () => { snd.hidden = !(v.muted || v.volume === 0); };
+  v.play().catch(() => { v.muted = true; showSnd(); return v.play(); }).catch(() => { v.muted = false; snd.hidden = true; });   // no autoplay at all: the normal play button
+  snd.onclick = () => { v.muted = false; v.volume = 1; snd.hidden = true; if (v.paused) v.play().catch(() => {});
+    const AC = window.AudioContext || window.webkitAudioContext; if (AC && !actx) actx = new AC(); actx && actx.resume().catch(() => {}); };   // unlock the park's audio in the same click
+  v.addEventListener('volumechange', showSnd);
+  v.addEventListener('ended', leaveGate);
+  $('#gClose').onclick = $('#gEnter').onclick = leaveGate;
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#gate').hidden){ e.preventDefault(); e.stopImmediatePropagation(); leaveGate(); } }, true);
+}
 // background music: starts when the visitor enters (browsers need a click first); the note button mutes it
 // Background music. Played through Web Audio so the loop is sample-accurate (an <audio> loop leaves a
 // small gap from the MP3's padding); the <audio> element is only a fallback for old browsers.
@@ -2012,7 +2061,7 @@ const CINE_BACK = 12;   // the opening shot starts this many metres further back
 const CINE_HOLD = 0.8, CINE_RISE = 2.0;   // hold close for 0.8 s, then rise: most of the move in ~1.6 s, the last ~0.4 s a slow settle
 let cine = null;
 function startCine(){ if (reduceMotion){ endCine(); return; } cine = { t:0, w0:performance.now() }; document.body.classList.add('cine'); snapCam = true; }
-function endCine(){ cine = null; document.body.classList.remove('cine'); if (openAfterCine){ const id = openAfterCine; openAfterCine = null; openProject(id); } }
+function endCine(){ cine = null; document.body.classList.remove('cine'); }
 const camGuestOff = new THREE.Vector3(), camGuestLook = new THREE.Vector3();
 let zoom = isTouch ? 1.45 : 1.35, zoomS = zoom;   // zoom = target, zoomS = eased value the camera uses
 canvas.addEventListener('wheel', e => { e.preventDefault(); zoom = THREE.MathUtils.clamp(zoom * (1 + THREE.MathUtils.clamp(e.deltaY, -120, 120) * .0012), ZOOM_MIN, ZOOM_MAX); }, { passive:false });
@@ -2271,7 +2320,8 @@ function frame(){
   resetPlayer();
   requestAnimationFrame(frame);
   window.__park = { scene, renderer, pl, colliders };
-  const b = $('#enterBtn'); b.disabled = false; $('#enterLabel').textContent = linkOpen ? linkOpen.label : 'Enter the park'; $('#linkBtn').disabled = false;
+  const b = $('#enterBtn'); b.disabled = false; $('#enterLabel').textContent = 'Enter the park'; parkReady = true;
+  if (enterWhenReady){ enterPark(); return; }
   // focused so Enter/Space starts, but without a focus ring until someone actually tabs
   b.classList.add('quiet'); b.focus({ focusVisible:false }); addEventListener('keydown', e => { if (e.key === 'Tab') b.classList.remove('quiet'); }, { once:true });
 })();
